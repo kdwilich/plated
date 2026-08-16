@@ -45,6 +45,8 @@ Tapping `Edit`:
 - turns the button into `Done`
 - replaces each row's ⓘ guide link with `⇄` (swap) and `✕` (remove)
 - shows one line under the header: **Today only — your routine is unchanged.**
+- hides the mobility card, which is tall enough to push the exercise list off
+  screen and is not editable anyway
 
 The header button is hidden when the session holds no exercises — a freestyle
 session starts empty and has nothing to edit.

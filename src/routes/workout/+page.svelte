@@ -27,6 +27,9 @@
 	let elapsed = $state('0:00');
 	let adding = $state(false);
 	let finishing = $state(false);
+	// Edit mode: today's list only. Nothing here reaches the routine.
+	let editing = $state(false);
+	let swapping = $state<string | null>(null);
 
 	// Recomputes as exercises are added, so a freestyle session's warm-up grows
 	// with it instead of staying general forever.
@@ -173,6 +176,50 @@
 		primeInputs(ex);
 	}
 
+	function toggleEdit() {
+		editing = !editing;
+		// Collapse everything: edit mode is a list view, not a logging view.
+		openId = null;
+		swapping = null;
+	}
+
+	function forgetInputs(id: string) {
+		delete weightInput[id];
+		delete repsInput[id];
+		delete durationInput[id];
+	}
+
+	// Only ever reachable at zero logged sets, so session.sets needs no cleanup.
+	async function removeExercise(ex: ActiveExercise) {
+		if (!session) return;
+		session.exercises = session.exercises.filter((e) => e.exercise_id !== ex.exercise_id);
+		forgetInputs(ex.exercise_id);
+		if (swapping === ex.exercise_id) swapping = null;
+		await saveActive(session);
+	}
+
+	async function swapExercise(old: ActiveExercise, row: ExerciseRow) {
+		if (!session) return;
+		if (session.exercises.some((e) => e.exercise_id === row.id)) return;
+		const res = await fetch(`/api/exercise-context?id=${encodeURIComponent(row.id)}`);
+		// Keep the picker open on failure: a dead zone costs the tap, not the swap.
+		if (!res.ok) return;
+		const next = (await res.json()) as ActiveExercise;
+		const at = session.exercises.findIndex((e) => e.exercise_id === old.exercise_id);
+		if (at === -1) return;
+		// The endpoint hands back a generic 3×8–12. A stand-in inherits the
+		// prescription of what it stands in for.
+		session.exercises[at] = {
+			...next,
+			target_sets: old.target_sets,
+			rep_min: old.rep_min,
+			rep_max: old.rep_max
+		};
+		forgetInputs(old.exercise_id);
+		swapping = null;
+		await saveActive(session);
+	}
+
 	async function finish() {
 		if (!session || finishing) return;
 		finishing = true;
@@ -195,10 +242,23 @@
 {#if session}
 	<header class="session-head">
 		<span class="label">{session.session_name}</span>
-		<span class="num elapsed">{elapsed}</span>
+		<div class="head-right">
+			<span class="num elapsed">{elapsed}</span>
+			{#if session.exercises.length > 0}
+				<button class="edit-toggle label" aria-pressed={editing} onclick={toggleEdit}>
+					{editing ? 'Done' : 'Edit'}
+				</button>
+			{/if}
+		</div>
 	</header>
 
-	<WarmupCard {drills} done={session.mobility_done ?? []} ontoggle={toggleDrill} />
+	{#if editing}
+		<p class="edit-hint">Today only — your routine is unchanged.</p>
+	{:else}
+		<!-- Hidden while editing: it is a tall card, and edit mode exists to put
+		     the whole exercise list on one screen. -->
+		<WarmupCard {drills} done={session.mobility_done ?? []} ontoggle={toggleDrill} />
+	{/if}
 
 	{#each session.exercises as ex (ex.exercise_id)}
 		{@const logged = setsFor(ex)}
@@ -207,15 +267,40 @@
 		{@const sugg = suggestionFor(ex)}
 		<section class="exercise card" class:done={working.length >= ex.target_sets}>
 			<div class="exercise-head-row">
-				<button class="exercise-head" onclick={() => toggle(ex)}>
+				<button class="exercise-head" disabled={editing} onclick={() => toggle(ex)}>
 					<span class="head-main">
 						<span class="exercise-name">{ex.name}</span>
 						{#if lastLine(ex)}<span class="last num">{lastLine(ex)}</span>{/if}
 					</span>
 					<span class="progress num">{working.length}/{ex.target_sets}</span>
 				</button>
-				<GuideLink exerciseId={ex.exercise_id} name={ex.name} />
+				{#if !editing}
+					<GuideLink exerciseId={ex.exercise_id} name={ex.name} />
+				{:else if logged.length === 0}
+					<button
+						class="row-action"
+						aria-label="Swap {ex.name}"
+						aria-expanded={swapping === ex.exercise_id}
+						onclick={() => (swapping = swapping === ex.exercise_id ? null : ex.exercise_id)}>⇄</button
+					>
+					<button class="row-action remove" aria-label="Remove {ex.name}" onclick={() => removeExercise(ex)}>✕</button>
+				{:else}
+					<!-- Sets are logged, so this row is a record now. See the spec. -->
+					<span class="locked label">logged</span>
+				{/if}
 			</div>
+
+			{#if editing && swapping === ex.exercise_id}
+				<div class="swap-area">
+					<ExercisePicker
+						placeholder="Swap with…"
+						recommendFor={ex.exercise_id}
+						sessionIds={session.exercises.map((e) => e.exercise_id)}
+						onpick={(row) => swapExercise(ex, row)}
+					/>
+					<button class="btn quiet" onclick={() => (swapping = null)}>Cancel</button>
+				</div>
+			{/if}
 
 			{#if open}
 				<div class="body">
@@ -349,9 +434,38 @@
 		margin-bottom: $space-4;
 	}
 
+	.head-right {
+		display: flex;
+		align-items: center;
+		gap: $space-3;
+	}
+
 	.elapsed {
 		font-size: 13px;
 		color: $text-faint;
+	}
+
+	.edit-toggle {
+		padding: 0 $space-3;
+		min-height: 32px;
+		border: 1px solid $hairline;
+		border-radius: $radius;
+		color: $text-dim;
+
+		&[aria-pressed='true'] {
+			border-color: $signal;
+			color: $signal;
+		}
+
+		&:active {
+			background: $hairline;
+		}
+	}
+
+	.edit-hint {
+		font-size: 12px;
+		color: $text-faint;
+		margin: -$space-2 0 $space-4;
 	}
 
 	.exercise {
@@ -376,8 +490,43 @@
 		min-width: 0;
 		padding: $space-3 $space-4;
 		text-align: left;
+
+		// Inert in edit mode, but it still has to read as a live row.
+		&:disabled {
+			opacity: 1;
+		}
 	}
 
+	// Sit where the guide link sits, so the row doesn't reflow entering edit mode.
+	.row-action {
+		min-width: $tap-target;
+		min-height: $tap-target;
+		font-size: 16px;
+		color: $text-dim;
+
+		&.remove {
+			color: $danger;
+		}
+
+		&:active {
+			background: $hairline;
+		}
+	}
+
+	.locked {
+		display: flex;
+		align-items: center;
+		padding-right: $space-4;
+		color: $text-faint;
+	}
+
+	.swap-area {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		padding: $space-3 $space-4 $space-4;
+		border-top: 1px solid $hairline-faint;
+	}
 
 	.head-main {
 		display: flex;
