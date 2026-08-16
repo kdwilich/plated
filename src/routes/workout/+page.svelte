@@ -14,8 +14,10 @@
 	import { solve } from '$lib/training/plates';
 	import { suggest, type Suggestion } from '$lib/training/progression';
 	import { ramp } from '$lib/training/warmup';
+	import { mobility } from '$lib/training/mobility';
 	import type { LoggedSet, ProgressionKind } from '$lib/training/types';
 	import PlateBar from '$lib/components/PlateBar.svelte';
+	import WarmupCard from '$lib/components/WarmupCard.svelte';
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
@@ -24,6 +26,17 @@
 	let elapsed = $state('0:00');
 	let adding = $state(false);
 	let finishing = $state(false);
+
+	// Recomputes as exercises are added, so a freestyle session's warm-up grows
+	// with it instead of staying general forever.
+	let drills = $derived(mobility((session?.exercises ?? []).map((e) => e.movement_pattern)));
+
+	async function toggleDrill(key: string) {
+		if (!session) return;
+		const done = session.mobility_done ?? [];
+		session.mobility_done = done.includes(key) ? done.filter((k) => k !== key) : [...done, key];
+		await saveActive(session);
+	}
 
 	// Per-exercise input state, keyed by exercise_id
 	let weightInput = $state<Record<string, number>>({});
@@ -183,6 +196,8 @@
 		<span class="label">{session.session_name}</span>
 		<span class="num elapsed">{elapsed}</span>
 	</header>
+
+	<WarmupCard {drills} done={session.mobility_done ?? []} ontoggle={toggleDrill} />
 
 	{#each session.exercises as ex (ex.exercise_id)}
 		{@const logged = setsFor(ex)}

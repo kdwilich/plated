@@ -46,6 +46,9 @@ export interface ActiveSession {
 	notes: string | null;
 	exercises: ActiveExercise[];
 	sets: ActiveSet[];
+	/** Mobility drills ticked off this session. Local only — never synced to
+	 *  D1, never in history, invisible to volume and progression. */
+	mobility_done?: string[];
 	gym: {
 		plates: { denomination_lb: number; pairs: number }[];
 		dumbbell_step_lb: number;
