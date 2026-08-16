@@ -14,6 +14,36 @@ export interface Profile {
 	rest_s: number;
 }
 
+export interface Prescription {
+	target_sets: number;
+	rep_min: number;
+	rep_max: number;
+	rir_target: number;
+}
+
+/**
+ * The prescription for an exercise a human picked, rather than one the
+ * generator slotted. `generate()` reads compound/isolation off its own template
+ * slots; `mechanic` is the catalog's word for the same distinction and the only
+ * signal available when the choice came from the picker.
+ *
+ * Anything the dataset declined to classify falls to isolation on purpose: an
+ * unlabelled exercise is likelier a curl than a squat, and the failure mode is
+ * a lighter prescription rather than a heavier one.
+ */
+export function prescriptionFor(
+	profile: Profile,
+	mechanic: string | null | undefined
+): Prescription {
+	const block = mechanic === 'compound' ? profile.compound : profile.isolation;
+	return {
+		target_sets: block.sets,
+		rep_min: block.rep_min,
+		rep_max: block.rep_max,
+		rir_target: profile.rir
+	};
+}
+
 export const PROFILES: Record<string, Profile> = {
 	hypertrophy: {
 		key: 'hypertrophy',
