@@ -1,0 +1,13 @@
+name = "plateload"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# database_id is a placeholder until a remote DB exists; local dev
+# (`npm run dev:wrangler`) uses a local sqlite copy keyed by binding name.
+# Before the first deploy: `npx wrangler d1 create plateload-db` and paste
+# the real id here.
+[[d1_databases]]
+binding = "DB"
+database_name = "plateload-db"
+database_id = "00000000-0000-0000-0000-000000000000"

@@ -1,0 +1,25 @@
+node_modules
+
+# Output
+.output
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Cloudflare local env vars
+.dev.vars
+
+# Seed working data (regenerate with npm run seed)
+/data/exercises.json
