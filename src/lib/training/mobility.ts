@@ -177,34 +177,45 @@ interface Picked {
 	labels: string[];
 }
 
+/** One triggered group's drills, in map order. */
+interface Queue {
+	region: Region;
+	drills: Picked[];
+}
+
 export function mobility(patterns: (MovementPattern | null | undefined)[]): MobilityDrill[] {
 	const present = new Set(patterns.filter((p): p is MovementPattern => Boolean(p)));
 
-	// Collect labels per drill id, so a drill triggered by two patterns says so.
-	const picked = new Map<string, Picked>();
+	// One queue per triggered group, collecting labels per drill id so a drill
+	// triggered by two patterns says so.
+	const seen = new Map<string, Picked>();
+	const queues: Queue[] = [];
 	for (const group of GROUPS) {
 		const hits = group.patterns.filter((p) => present.has(p));
 		if (hits.length === 0) continue;
 		const labels = hits.map((p) => PATTERN_LABEL[p]);
+		const queue: Queue = { region: group.region, drills: [] };
 		for (const def of group.drills) {
-			const existing = picked.get(def.exercise_id);
+			const existing = seen.get(def.exercise_id);
 			if (existing) {
 				for (const l of labels) if (!existing.labels.includes(l)) existing.labels.push(l);
 				continue;
 			}
-			picked.set(def.exercise_id, { def, region: group.region, labels: [...labels] });
+			const drill: Picked = { def, region: group.region, labels: [...labels] };
+			seen.set(def.exercise_id, drill);
+			queue.drills.push(drill);
 		}
+		if (queue.drills.length > 0) queues.push(queue);
 	}
 
-	const all = [...picked.values()];
-	const lower = all.filter((p) => p.region === 'lower');
-	const upper = all.filter((p) => p.region === 'upper');
-	const core = all.filter((p) => p.region === 'core');
-	// Core drills join whichever side has fewer, so they never crowd a region out.
+	const lower = queues.filter((q) => q.region === 'lower');
+	const upper = queues.filter((q) => q.region === 'upper');
+	const core = queues.filter((q) => q.region === 'core');
+	// Core joins whichever side has fewer groups, so it never crowds one out.
 	(lower.length <= upper.length ? lower : upper).push(...core);
 
-	// Alternate between regions when filling, so a leg-heavy full body day does
-	// not spend the whole cap below the waist.
+	// Lead with the region carrying more compounds, then alternate, so a
+	// leg-heavy day does not spend the whole cap below the waist.
 	let lowerCompounds = 0;
 	let upperCompounds = 0;
 	for (const p of present) {
@@ -212,12 +223,25 @@ export function mobility(patterns: (MovementPattern | null | undefined)[]): Mobi
 		if (COMPOUND_REGION[p] === 'upper') upperCompounds++;
 	}
 	const [first, second] = lowerCompounds >= upperCompounds ? [lower, upper] : [upper, lower];
+	const ordered: Queue[] = [];
+	for (let i = 0; i < Math.max(first.length, second.length); i++) {
+		if (i < first.length) ordered.push(first[i]);
+		if (i < second.length) ordered.push(second[i]);
+	}
 
+	// Round-robin across groups, not straight down them: every movement the
+	// session trains gets a drill before any movement gets a second one. Taking
+	// each group's list in order instead would spend an upper day's whole cap on
+	// chest and shoulders and leave a back-heavy session with nothing for the
+	// back.
 	const room = CAP - ALWAYS.length;
 	const chosen: Picked[] = [];
-	for (let i = 0; chosen.length < room && (i < first.length || i < second.length); i++) {
-		if (i < first.length && chosen.length < room) chosen.push(first[i]);
-		if (i < second.length && chosen.length < room) chosen.push(second[i]);
+	const depth = Math.max(...ordered.map((q) => q.drills.length), 0);
+	for (let pass = 0; pass < depth && chosen.length < room; pass++) {
+		for (const q of ordered) {
+			if (chosen.length >= room) break;
+			if (pass < q.drills.length) chosen.push(q.drills[pass]);
+		}
 	}
 
 	// Rendered order is general -> lower -> upper, so you are not getting up and

@@ -106,16 +106,26 @@ represents it. It does not count against the drill cap.
 1. Every pattern present in the session contributes its drills.
 2. Dedupe by `exercise_id`, merging the reasons — a session that squats and
    lunges yields one Sit Squats row reading "squatting and lunging today".
-3. Partition the remainder into lower and upper buckets (core drills join the
-   smaller bucket).
-4. **Alternate between buckets** when filling, starting with the region holding
-   more compound patterns, until the cap.
+3. Partition the triggered *groups* into lower and upper (core joins whichever
+   has fewer groups), then interleave them, leading with the region holding
+   more compound patterns.
+4. **Round-robin across groups**: take one drill from each group, then a second
+   from each, until the cap.
 5. Cap at **6 drills**, always-on included, cardio opener excluded. So: opener,
    two always-on, four pattern drills.
 
-Step 4 is the non-obvious part. Ranking purely by region would let a
-leg-heavy day crowd out every upper drill, and a full-body session is exactly
-the case where both regions need representation. Alternating guarantees it.
+Step 4 is the non-obvious part, and an earlier draft got it wrong. Alternating
+between *regions* alone balances a full-body day but does nothing within a
+region: on a single-region day it degrades to "first four in map order." A real
+Upper A session — pressing, rowing, overhead pressing and pulling — produced two
+chest drills and two shoulder drills and nothing at all for the back, because
+the chest group was declared first. Round-robining across groups guarantees
+every movement the session trains gets a drill before any movement gets a
+second.
+
+A full-body day can still trigger more than four groups, and then some genuinely
+get cut. That is the cap doing its job; the alternative is a longer list, which
+is the thing this feature is trying not to be.
 
 Order within the rendered list is general → lower → upper, so you are not
 getting up and down off the floor.

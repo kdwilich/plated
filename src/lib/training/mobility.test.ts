@@ -60,6 +60,31 @@ test('a pull-only session gets no leg drills beyond the always-on pair', () => {
 	assert.ok(ids.includes('Dynamic_Back_Stretch'));
 });
 
+test('an upper day covers every region it trains, not just the first two', () => {
+	// Regression: filling each group's list in order spent the whole cap on
+	// chest and shoulders, so a session that rowed and pulled got no back drill.
+	const ids = mobility([
+		'horizontal_press',
+		'horizontal_pull',
+		'vertical_press',
+		'vertical_pull',
+		'biceps_curl',
+		'triceps_extension'
+	]).map((d) => d.exercise_id);
+
+	assert.ok(ids.includes('Dynamic_Chest_Stretch'), 'nothing for the chest');
+	assert.ok(ids.includes('Shoulder_Circles'), 'nothing for the shoulders');
+	assert.ok(ids.includes('Dynamic_Back_Stretch'), 'nothing for the back');
+});
+
+test('breadth beats depth: no group gets a second drill while another has none', () => {
+	// squat and hip_hinge are different groups; both must be represented before
+	// either contributes twice.
+	const ids = mobility(['squat', 'hip_hinge']).map((d) => d.exercise_id);
+	assert.ok(ids.includes('Sit_Squats'));
+	assert.ok(ids.includes('Inchworm'));
+});
+
 test('a drill triggered by two patterns names both', () => {
 	const sitSquats = mobility(['squat', 'lunge']).find((d) => d.exercise_id === 'Sit_Squats');
 	assert.ok(sitSquats);
