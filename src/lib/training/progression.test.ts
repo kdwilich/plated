@@ -25,7 +25,8 @@ test('increment is equipment-aware', () => {
 	assert.equal(incrementFor('barbell', GYM), 5); // 2 x 2.5
 	assert.equal(incrementFor('dumbbell', GYM), 5);
 	assert.equal(incrementFor('machine', GYM), 10);
-	assert.equal(incrementFor('body only', GYM), 0);
+	// Assisted/added bodyweight work (pull-ups, dips) moves in stack-sized steps.
+	assert.equal(incrementFor('body only', GYM), 10);
 	assert.equal(incrementFor('machine', GYM, 2.5), 2.5); // override wins
 });
 
@@ -109,6 +110,64 @@ test('warmup sets never count', () => {
 	const warm: LoggedSet = { weight_lb: 135, reps: 10, is_warmup: true, duration_s: null };
 	const s = suggest([[warm, set(185, 10), set(185, 10), set(185, 10)]], 6, 10, 'double', 5);
 	assert.equal(s?.type, 'add_load');
+});
+
+// Assisted bodyweight work: weight_lb is net load relative to bodyweight, so
+// negative means assisted and progress runs toward zero.
+test('assisted pull-ups progress by reducing assistance', () => {
+	const s = suggest([[set(-40, 10), set(-40, 10), set(-40, 10)]], 6, 10, 'double', 10, true);
+	assert.equal(s?.type, 'add_load');
+	assert.equal(s?.weight_lb, -30, 'should move toward bodyweight, not further from it');
+	assert.equal(s?.target_reps, 6);
+});
+
+test('bodyweight graduates into added weight', () => {
+	const s = suggest([[set(0, 10), set(0, 10), set(0, 10)]], 6, 10, 'double', 10, true);
+	assert.equal(s?.type, 'add_load');
+	assert.equal(s?.weight_lb, 10);
+});
+
+test('added weight keeps climbing without the big-jump brake', () => {
+	// 10 lb against a 25 lb belt is a 40% ratio, but the real load is
+	// bodyweight + 25 — the guard would wrongly stall progress here.
+	const s = suggest([[set(25, 10), set(25, 10)]], 6, 10, 'double', 10, true);
+	assert.equal(s?.type, 'add_load');
+	assert.equal(s?.weight_lb, 35);
+
+	// The same numbers on a dumbbell DO deserve the brake.
+	const dumbbell = suggest([[set(25, 10), set(25, 10)]], 6, 10, 'double', 10, false);
+	assert.equal(dumbbell?.type, 'add_reps');
+});
+
+test('stalled assisted work deloads toward MORE assistance', () => {
+	const s = suggest(
+		[
+			[set(-40, 4), set(-40, 3)],
+			[set(-40, 5), set(-40, 4)]
+		],
+		6,
+		10,
+		'double',
+		10,
+		true
+	);
+	assert.equal(s?.type, 'deload');
+	assert.equal(s?.weight_lb, -45, 'deload must add assistance, not remove it');
+});
+
+test('stalled loaded work still deloads downward', () => {
+	const s = suggest(
+		[
+			[set(200, 4)],
+			[set(200, 5)]
+		],
+		6,
+		10,
+		'double',
+		10
+	);
+	assert.equal(s?.type, 'deload');
+	assert.equal(s?.weight_lb, 180);
 });
 
 test('progression "none" stays silent', () => {

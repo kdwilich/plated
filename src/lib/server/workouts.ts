@@ -108,6 +108,14 @@ export async function lastPerformances(
 	return out;
 }
 
+/** Sets go too — the schema cascades, but D1 needs foreign keys enabled. */
+export async function deleteWorkout(db: D1Database, id: string): Promise<void> {
+	await db.batch([
+		db.prepare('DELETE FROM workout_set WHERE workout_id = ?').bind(id),
+		db.prepare('DELETE FROM workout WHERE id = ?').bind(id)
+	]);
+}
+
 export interface WorkoutSummary {
 	id: string;
 	routine_session_id: string | null;

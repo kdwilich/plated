@@ -35,8 +35,14 @@ export function incrementFor(
 		case 'machine':
 		case 'cable':
 			return gym.machine_step_lb;
+		case 'body only':
+			// Covers assisted-machine/band or added-weight (belt, vest) progress
+			// on exercises like pull-ups and dips — net load can go negative
+			// (more assisted) or positive (more added). A stack's pin step is
+			// close enough to reuse as the default jump either direction.
+			return gym.machine_step_lb;
 		default:
-			return 0; // bodyweight and friends: progress by reps
+			return 0; // most bodyweight work has no load axis: progress by reps
 	}
 }
 
@@ -45,12 +51,20 @@ const workingSets = (sets: LoggedSet[]) => sets.filter((s) => !s.is_warmup);
 /**
  * @param sessions Working-set history for one exercise, newest session first.
  */
+/**
+ * @param isNetLoad Weight is an offset from bodyweight (assisted/added
+ *   pull-ups and dips) rather than the total load being moved. Disables the
+ *   big-jump guard, whose ratio is meaningless when the denominator is a net
+ *   offset: +10 lb on a 25 lb belt looks like a 40% jump but is ~5% of what
+ *   is actually being lifted.
+ */
 export function suggest(
 	sessions: LoggedSet[][],
 	repMin: number,
 	repMax: number,
 	kind: ProgressionKind,
-	incrementLb: number
+	incrementLb: number,
+	isNetLoad = false
 ): Suggestion | null {
 	if (kind === 'none') return null;
 
@@ -74,7 +88,7 @@ export function suggest(
 
 	// A big jump (dumbbells, mostly) means we extend the rep range instead of
 	// jumping 15%+ and failing. ~10% is the line.
-	const bigJump = incrementLb > 0 && topWeight > 0 && incrementLb / topWeight > 0.1;
+	const bigJump = !isNetLoad && incrementLb > 0 && topWeight > 0 && incrementLb / topWeight > 0.1;
 	const effectiveMax = bigJump ? repMax + 3 : repMax;
 
 	const allAtTop = reps.every((r) => r >= effectiveMax);
@@ -99,15 +113,22 @@ export function suggest(
 		const prevFirst = prev[0]?.reps ?? 0;
 		if (
 			prevTop === topWeight &&
-			topWeight > 0 &&
+			topWeight !== 0 &&
 			lastFirst < repMin &&
 			prevFirst < repMin
 		) {
+			// Back off ~10% of the effort, which for assisted work (negative
+			// net load) means MORE assistance, not less: -40 deloads to -45,
+			// while 200 deloads to 180.
+			const eased = topWeight - Math.abs(topWeight) * 0.1;
 			return {
 				type: 'deload',
-				weight_lb: Math.round((topWeight * 0.9) / 5) * 5,
+				weight_lb: Math.round(eased / 5) * 5,
 				target_reps: repMin,
-				note: 'Two sessions stuck under the range — back off ~10% and rebuild.'
+				note:
+					topWeight < 0
+						? 'Two sessions stuck under the range — take more assistance and rebuild.'
+						: 'Two sessions stuck under the range — back off ~10% and rebuild.'
 			};
 		}
 	}

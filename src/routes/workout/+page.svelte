@@ -64,7 +64,8 @@
 			ex.rep_min ?? 8,
 			ex.rep_max ?? 12,
 			ex.progression as ProgressionKind,
-			ex.increment_lb
+			ex.increment_lb,
+			allowsNegativeLoad(ex)
 		);
 	}
 
@@ -75,7 +76,8 @@
 			return `LAST · ${last.map((s) => `${s.duration_s ?? 0}s`).join(', ')}`;
 		}
 		const w = Math.max(...last.map((s) => s.weight_lb ?? 0));
-		return `LAST · ${w > 0 ? `${fmt(w)} × ` : ''}${last.map((s) => s.reps ?? 0).join(',')}`;
+		const showWeight = allowsNegativeLoad(ex) || w > 0;
+		return `LAST · ${showWeight ? `${loadLabel(ex, w)} × ` : ''}${last.map((s) => s.reps ?? 0).join(',')}`;
 	}
 
 	function primeInputs(ex: ActiveExercise) {
@@ -84,7 +86,7 @@
 		const lastWorking = ex.history[0]?.filter((s) => !s.is_warmup) ?? [];
 		const lastWeight = lastWorking.length ? Math.max(...lastWorking.map((s) => s.weight_lb ?? 0)) : 0;
 		const barDefault = isBarbell(ex) ? ex.bar_lb : 0;
-		weightInput[ex.exercise_id] = sugg?.weight_lb ?? (lastWeight > 0 ? lastWeight : barDefault);
+		weightInput[ex.exercise_id] = sugg?.weight_lb ?? (lastWeight !== 0 ? lastWeight : barDefault);
 		repsInput[ex.exercise_id] = sugg?.target_reps ?? ex.rep_min ?? 8;
 		durationInput[ex.exercise_id] = sugg?.target_duration_s ?? 30;
 	}
@@ -99,6 +101,15 @@
 	const usesTime = (ex: ActiveExercise) =>
 		ex.measurement === 'time' || ex.measurement === 'load_time' || ex.measurement === 'distance_time';
 	const isBarbell = (ex: ActiveExercise) => ex.equipment === 'barbell' || ex.equipment === 'e-z curl bar';
+	// Pull-ups, chin-ups, dips: weight_lb is net load relative to bodyweight —
+	// 0 means bodyweight only, negative means assisted, positive means added.
+	const allowsNegativeLoad = (ex: ActiveExercise) => ex.equipment === 'body only' && usesLoad(ex);
+
+	function loadLabel(ex: ActiveExercise, w: number): string {
+		if (!allowsNegativeLoad(ex)) return fmt(w);
+		if (w === 0) return 'BW';
+		return w > 0 ? `+${fmt(w)}` : fmt(w);
+	}
 
 	function setsFor(ex: ActiveExercise) {
 		return (session?.sets ?? []).filter((s) => s.exercise_id === ex.exercise_id);
@@ -106,7 +117,10 @@
 
 	function bump(ex: ActiveExercise, dir: 1 | -1) {
 		const step = ex.increment_lb > 0 ? ex.increment_lb : 5;
-		weightInput[ex.exercise_id] = Math.max(0, (weightInput[ex.exercise_id] ?? 0) + dir * step);
+		const next = (weightInput[ex.exercise_id] ?? 0) + dir * step;
+		// Barbell/dumbbell/machine loads can't go negative. Assisted bodyweight
+		// work is the one case where negative is the whole point.
+		weightInput[ex.exercise_id] = allowsNegativeLoad(ex) ? next : Math.max(0, next);
 	}
 
 	async function logSet(ex: ActiveExercise, warmup = false, presetWeight?: number, presetReps?: number) {
@@ -207,7 +221,7 @@
 									class="display weight"
 									type="number"
 									inputmode="decimal"
-									min="0"
+									min={allowsNegativeLoad(ex) ? undefined : 0}
 									step="any"
 									bind:value={weightInput[ex.exercise_id]}
 									style:width="{String(weightInput[ex.exercise_id] ?? 0).length + 0.7}ch"
@@ -217,6 +231,18 @@
 							</div>
 							<button class="stepper num" onclick={() => bump(ex, 1)}>+{fmt(ex.increment_lb > 0 ? ex.increment_lb : 5)}</button>
 						</div>
+
+						{#if allowsNegativeLoad(ex)}
+							<p class="assist-hint">
+								{#if (weightInput[ex.exercise_id] ?? 0) === 0}
+									Bodyweight only. Go negative for assistance, positive for added weight.
+								{:else if (weightInput[ex.exercise_id] ?? 0) < 0}
+									{fmt(Math.abs(weightInput[ex.exercise_id]))} lb assisted
+								{:else}
+									{fmt(weightInput[ex.exercise_id])} lb added
+								{/if}
+							</p>
+						{/if}
 
 						{#if isBarbell(ex)}
 							{@const solution = solve(weightInput[ex.exercise_id] ?? 0, ex.bar_lb, session.gym.plates)}
@@ -268,7 +294,7 @@
 								<li class="hairline-row">
 									<span class="num set-label">{s.is_warmup ? 'W' : `SET ${logged.slice(0, i + 1).filter((x) => !x.is_warmup).length}`}</span>
 									<span class="num set-value">
-										{#if s.weight_lb != null}{fmt(s.weight_lb)}{/if}
+										{#if s.weight_lb != null}{loadLabel(ex, s.weight_lb)}{/if}
 										{#if s.reps != null}&nbsp;× {s.reps}{/if}
 										{#if s.duration_s != null}&nbsp;{s.duration_s}s{/if}
 									</span>
@@ -458,6 +484,12 @@
 	.approx {
 		font-size: 11px;
 		color: $signal;
+	}
+
+	.assist-hint {
+		font-size: 12px;
+		color: $text-dim;
+		margin-top: -$space-2;
 	}
 
 	.warmups {
