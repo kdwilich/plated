@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mobility } from './mobility.ts';
+import { readFileSync } from 'node:fs';
+import { mobility, MOBILITY_EXERCISE_IDS } from './mobility.ts';
 import type { MovementPattern } from './types.ts';
 
 const FULL_BODY: MovementPattern[] = [
@@ -80,4 +81,21 @@ test('null and undefined patterns are ignored, not crashed on', () => {
 
 test('deterministic: the same patterns produce the same list', () => {
 	assert.deepEqual(mobility(FULL_BODY), mobility(FULL_BODY));
+});
+
+test('every mapped drill exists in the exercise catalog', () => {
+	const catalog = JSON.parse(
+		readFileSync(new URL('../../../data/exercises.json', import.meta.url), 'utf8')
+	) as { id: string }[];
+	const ids = new Set(catalog.map((e) => e.id));
+	const missing = MOBILITY_EXERCISE_IDS.filter((id) => !ids.has(id));
+	assert.deepEqual(missing, [], `mapped ids not in the catalog: ${missing.join(', ')}`);
+});
+
+test('the compound patterns each contribute drills of their own', () => {
+	// A pattern with no drills is not an error, but for the big compounds it
+	// would be an oversight rather than a choice.
+	for (const p of ['squat', 'hip_hinge', 'horizontal_press', 'vertical_pull'] as MovementPattern[]) {
+		assert.ok(mobility([p]).length > 3, `${p} contributed no drills of its own`);
+	}
 });
