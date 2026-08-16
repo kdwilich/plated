@@ -176,13 +176,22 @@
 		{@const open = openId === ex.exercise_id}
 		{@const sugg = suggestionFor(ex)}
 		<section class="exercise card" class:done={working.length >= ex.target_sets}>
-			<button class="exercise-head" onclick={() => toggle(ex)}>
-				<span class="head-main">
-					<span class="exercise-name">{ex.name}</span>
-					{#if lastLine(ex)}<span class="last num">{lastLine(ex)}</span>{/if}
-				</span>
-				<span class="progress num">{working.length}/{ex.target_sets}</span>
-			</button>
+			<div class="exercise-head-row">
+				<button class="exercise-head" onclick={() => toggle(ex)}>
+					<span class="head-main">
+						<span class="exercise-name">{ex.name}</span>
+						{#if lastLine(ex)}<span class="last num">{lastLine(ex)}</span>{/if}
+					</span>
+					<span class="progress num">{working.length}/{ex.target_sets}</span>
+				</button>
+				<a class="guide-link" href="/exercises/{ex.exercise_id}" aria-label="{ex.name} guide" title="Exercise guide">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<circle cx="12" cy="12" r="9" />
+						<line x1="12" y1="11" x2="12" y2="16.5" />
+						<circle cx="12" cy="7.5" r="0.5" fill="currentColor" stroke="none" />
+					</svg>
+				</a>
+			</div>
 
 			{#if open}
 				<div class="body">
@@ -315,14 +324,35 @@
 		}
 	}
 
+	.exercise-head-row {
+		display: flex;
+		align-items: stretch;
+	}
+
 	.exercise-head {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		gap: $space-3;
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		padding: $space-3 $space-4;
 		text-align: left;
+	}
+
+	.guide-link {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: $tap-target;
+		flex-shrink: 0;
+		color: $text-faint;
+		border-left: 1px solid $hairline-faint;
+
+		&:active {
+			background: $hairline;
+			color: $text-dim;
+		}
 	}
 
 	.head-main {
