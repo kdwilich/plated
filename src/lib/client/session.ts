@@ -3,7 +3,7 @@
 // regained connectivity, and on every app launch. All ids are client UUIDs,
 // so a retried POST is idempotent server-side.
 
-import type { LoggedSet } from '$lib/training/types';
+import type { LoggedSet, MovementPattern } from '$lib/training/types';
 
 export interface ActiveSet {
 	id: string;
@@ -25,6 +25,9 @@ export interface ActiveExercise {
 	progression: string;
 	equipment: string | null;
 	mechanic: string | null;
+	/** Drives the mobility warm-up. Optional: sessions stored before this
+	 *  existed won't have it, and must keep working. */
+	movement_pattern?: MovementPattern | null;
 	target_sets: number;
 	rep_min: number | null;
 	rep_max: number | null;

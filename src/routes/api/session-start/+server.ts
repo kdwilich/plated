@@ -23,6 +23,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		progression: string;
 		equipment: string | null;
 		mechanic: string | null;
+		movement_pattern: string | null;
 		target_sets: number;
 		rep_min: number | null;
 		rep_max: number | null;
@@ -39,7 +40,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const { results } = await db
 			.prepare(
 				`SELECT re.target_sets, re.rep_min, re.rep_max, re.increment_lb AS override_lb, re.bar_id,
-				        e.id, e.name, e.measurement, e.progression, e.equipment, e.mechanic
+				        e.id, e.name, e.measurement, e.progression, e.equipment, e.mechanic,
+				        e.movement_pattern
 				 FROM routine_exercise re JOIN exercise e ON e.id = re.exercise_id
 				 WHERE re.session_id = ? ORDER BY re.position`
 			)
@@ -52,6 +54,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			progression: r.progression as string,
 			equipment: r.equipment as string | null,
 			mechanic: r.mechanic as string | null,
+			movement_pattern: r.movement_pattern as string | null,
 			target_sets: r.target_sets as number,
 			rep_min: r.rep_min as number | null,
 			rep_max: r.rep_max as number | null,

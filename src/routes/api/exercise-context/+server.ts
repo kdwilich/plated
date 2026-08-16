@@ -24,6 +24,7 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		progression: ex.progression,
 		equipment: ex.equipment,
 		mechanic: ex.mechanic,
+		movement_pattern: ex.movement_pattern,
 		target_sets: 3,
 		rep_min: 8,
 		rep_max: 12,
