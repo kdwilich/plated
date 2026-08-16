@@ -233,12 +233,14 @@
 							{#if warmups.length > 0}
 								<div class="warmups">
 									<span class="label">Warmup</span>
-									{#each warmups as w, i (i)}
-										{@const done = logged.some((s) => s.is_warmup && s.weight_lb === w.weight_lb)}
-										<button class="chip num" class:chip-done={done} onclick={() => logSet(ex, true, w.weight_lb, w.reps)}>
-											{fmt(w.weight_lb)}×{w.reps}
-										</button>
-									{/each}
+									<div class="warmups-chips">
+										{#each warmups as w, i (i)}
+											{@const done = logged.some((s) => s.is_warmup && s.weight_lb === w.weight_lb)}
+											<button class="chip num" class:chip-done={done} onclick={() => logSet(ex, true, w.weight_lb, w.reps)}>
+												{fmt(w.weight_lb)}×{w.reps}
+											</button>
+										{/each}
+									</div>
 								</div>
 							{/if}
 						{/if}
@@ -460,6 +462,12 @@
 
 	.warmups {
 		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	.warmups-chips {
+		display: flex;
 		align-items: center;
 		gap: $space-2;
 		flex-wrap: wrap;
@@ -474,8 +482,8 @@
 		color: $text-dim;
 
 		&.chip-done {
-			color: $text-faint;
-			text-decoration: line-through;
+			border-color: $ok;
+			color: $ok;
 		}
 	}
 

@@ -19,7 +19,10 @@ const PLATE_COLORS: Record<number, string> = {
 	25: '#00843d',
 	10: '#f2f4f7',
 	5: '#c8102e',
-	2.5: '#1f2227'
+	// True black (#1f2227) was indistinguishable from the card background
+	// ($surface #14161a / $surface-raised #191c21). Lifted enough to read
+	// as its own block while staying the visibly darkest plate in the set.
+	2.5: '#4b4f56'
 };
 
 export function plateColor(denomination: number): string {
