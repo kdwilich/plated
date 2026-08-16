@@ -1,4 +1,6 @@
 import type { Exercise } from '$lib/training/types';
+import { matchesFilter, type ExerciseFilter } from '$lib/training/filters';
+import { musclesInGroup } from '$lib/training/volume';
 
 export interface ExerciseRow extends Exercise {
 	mechanic: string | null;
@@ -48,6 +50,63 @@ export async function searchExercises(db: D1Database, q: string, limit = 25): Pr
 		.prepare(`SELECT ${COLS} FROM exercise WHERE name LIKE ? ORDER BY priority DESC, name LIMIT ?`)
 		.bind(`%${trimmed}%`, limit)
 		.all();
+	return results.map(rowToExercise);
+}
+
+/**
+ * The picker's one query: free text, muscle group, force, equipment — any
+ * combination, any of them absent.
+ *
+ * SQL narrows on what it can index or LIKE; the final say belongs to
+ * `matchesFilter`, so the picker and the pure core can never disagree about
+ * whether a lat pulldown is "back". Nothing here matters at 873 rows except
+ * keeping that single source of truth.
+ */
+export async function findExercises(
+	db: D1Database,
+	opts: ExerciseFilter & { q?: string; limit?: number }
+): Promise<ExerciseRow[]> {
+	const limit = opts.limit ?? 30;
+	const filter: ExerciseFilter = { group: opts.group, force: opts.force, equipment: opts.equipment };
+
+	if (opts.q?.trim()) {
+		// Search ranks by relevance; over-fetch so filters have something to cut.
+		const hits = await searchExercises(db, opts.q, 200);
+		return hits.filter((e) => matchesFilter(e, filter)).slice(0, limit);
+	}
+
+	const where: string[] = [];
+	const binds: unknown[] = [];
+	if (opts.equipment) {
+		where.push('equipment = ?');
+		binds.push(opts.equipment);
+	}
+	if (opts.group) {
+		const muscles = musclesInGroup(opts.group);
+		if (muscles.length === 0) return [];
+		where.push(`(${muscles.map(() => 'primary_muscles LIKE ?').join(' OR ')})`);
+		binds.push(...muscles.map((m) => `%"${m}"%`));
+	}
+	// Force has no column to sit in — it is derived, so JS does that pass.
+	if (where.length === 0 && !opts.force) return [];
+
+	const { results } = await db
+		.prepare(
+			`SELECT ${COLS} FROM exercise` +
+				(where.length ? ` WHERE ${where.join(' AND ')}` : '') +
+				' ORDER BY priority DESC, name COLLATE NOCASE'
+		)
+		.bind(...binds)
+		.all();
+	return results
+		.map(rowToExercise)
+		.filter((e) => matchesFilter(e, filter))
+		.slice(0, limit);
+}
+
+/** The whole catalog, for the ranking functions to score against. */
+export async function allExercises(db: D1Database): Promise<ExerciseRow[]> {
+	const { results } = await db.prepare(`SELECT ${COLS} FROM exercise`).all();
 	return results.map(rowToExercise);
 }
 

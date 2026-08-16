@@ -28,6 +28,11 @@ export function muscleGroup(muscle: string): string | null {
 	return GROUP[muscle] ?? null;
 }
 
+/** The dataset muscles a group is made of — lets SQL narrow before JS filters. */
+export function musclesInGroup(group: string): string[] {
+	return Object.keys(GROUP).filter((m) => GROUP[m] === group);
+}
+
 /** Every group a complete routine should train directly. */
 export const MAJOR_GROUPS = [
 	'chest',

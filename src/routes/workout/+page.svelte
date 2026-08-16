@@ -16,7 +16,7 @@
 	import { ramp } from '$lib/training/warmup';
 	import type { LoggedSet, ProgressionKind } from '$lib/training/types';
 	import PlateBar from '$lib/components/PlateBar.svelte';
-	import ExerciseSearch from '$lib/components/ExerciseSearch.svelte';
+	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
 	let session = $state<ActiveSession | undefined>(undefined);
@@ -309,8 +309,8 @@
 	{/each}
 
 	{#if adding}
-		<div class="add-search">
-			<ExerciseSearch onpick={addExercise} />
+		<div class="add-search card">
+			<ExercisePicker sessionIds={session.exercises.map((e) => e.exercise_id)} onpick={addExercise} />
 			<button class="btn quiet" onclick={() => (adding = false)}>Cancel</button>
 		</div>
 	{:else}
@@ -564,7 +564,8 @@
 	.add-search {
 		display: flex;
 		flex-direction: column;
-		gap: $space-2;
+		gap: $space-3;
 		margin-top: $space-3;
+		padding: $space-4;
 	}
 </style>

@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import ExerciseSearch from '$lib/components/ExerciseSearch.svelte';
+	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 
 	let { data } = $props();
+
+	// While the picker is filtering, it *is* the list — the A–Z browse below
+	// would just be a second, contradictory answer to the same question.
+	let picking = $state(false);
 
 	// Digits and punctuation collect under "#" so the jump bar stays A–Z.
 	function initial(name: string): string {
@@ -26,29 +30,35 @@
 
 <h1 class="display page-title">Exercises</h1>
 
-<ExerciseSearch onpick={(ex) => goto(`/exercises/${ex.id}`)} />
+<ExercisePicker
+	placeholder="Search all exercises…"
+	onpick={(ex) => goto(`/exercises/${ex.id}`)}
+	onnarrow={(v) => (picking = v)}
+/>
 
-<nav class="jump" aria-label="Jump to letter">
+{#if !picking}
+	<nav class="jump" aria-label="Jump to letter">
+		{#each groups as g (g.letter)}
+			<a href="#letter-{g.letter}">{g.letter}</a>
+		{/each}
+	</nav>
+
 	{#each groups as g (g.letter)}
-		<a href="#letter-{g.letter}">{g.letter}</a>
+		<section>
+			<h2 class="letter label" id="letter-{g.letter}">{g.letter}</h2>
+			<ul>
+				{#each g.items as ex (ex.id)}
+					<li>
+						<a class="hairline-row row" href="/exercises/{ex.id}">
+							<span class="name">{ex.name}</span>
+							<span class="meta num">{ex.equipment ?? ''}</span>
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</section>
 	{/each}
-</nav>
-
-{#each groups as g (g.letter)}
-	<section>
-		<h2 class="letter label" id="letter-{g.letter}">{g.letter}</h2>
-		<ul>
-			{#each g.items as ex (ex.id)}
-				<li>
-					<a class="hairline-row row" href="/exercises/{ex.id}">
-						<span class="name">{ex.name}</span>
-						<span class="meta num">{ex.equipment ?? ''}</span>
-					</a>
-				</li>
-			{/each}
-		</ul>
-	</section>
-{/each}
+{/if}
 
 <style lang="scss">
 	.page-title {

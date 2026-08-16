@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import ExerciseSearch from '$lib/components/ExerciseSearch.svelte';
+	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
 	let { data } = $props();
@@ -77,7 +77,12 @@
 									</form>
 								</div>
 								{#if swapping === re.id}
-									<ExerciseSearch placeholder="Swap with…" onpick={pickForSwap} />
+									<ExercisePicker
+										placeholder="Swap with…"
+										recommendFor={re.exercise_id}
+										sessionIds={session.exercises.map((e) => e.exercise_id)}
+										onpick={pickForSwap}
+									/>
 									<form
 										method="POST"
 										action="?/swap"
@@ -104,7 +109,10 @@
 
 				{#if addingTo === session.id}
 					<div class="add-area">
-						<ExerciseSearch onpick={pickForAdd} />
+						<ExercisePicker
+							sessionIds={session.exercises.map((e) => e.exercise_id)}
+							onpick={pickForAdd}
+						/>
 						<form
 							method="POST"
 							action="?/add"
@@ -240,7 +248,7 @@
 		padding: $space-3 $space-4;
 		display: flex;
 		flex-direction: column;
-		gap: $space-2;
+		gap: $space-3;
 	}
 
 	.empty {
