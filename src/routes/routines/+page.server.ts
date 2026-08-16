@@ -1,62 +1,37 @@
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
-import {
-	addRoutineExercise,
-	deleteRoutineExercise,
-	getActiveRoutine,
-	updateRoutineExercise
-} from '$lib/server/routines';
+import { getGym } from '$lib/server/gym';
+import { activateRoutine, createRoutine, listRoutines } from '$lib/server/routines';
 import { PROFILES } from '$lib/training/profiles';
 
 export const load: PageServerLoad = async ({ platform }) => {
 	const db = getDb(platform);
-	const routine = await getActiveRoutine(db);
-	return { routine, profiles: Object.values(PROFILES) };
+	return { routines: await listRoutines(db), profiles: Object.values(PROFILES) };
 };
 
 export const actions: Actions = {
-	update: async ({ request, platform }) => {
+	create: async ({ platform }) => {
+		const db = getDb(platform);
+		const gym = await getGym(db);
+		// Inherit the approach you are already training under, so a hand-built
+		// routine prescribes the same way the generated one did.
+		const active = (await listRoutines(db)).find((r) => r.is_active);
+		const id = await createRoutine(db, 'New routine', active?.profile_key ?? 'hypertrophy', gym.id);
+		redirect(303, `/routines/${id}`);
+	},
+
+	activate: async ({ request, platform }) => {
 		const db = getDb(platform);
 		const form = await request.formData();
 		const id = form.get('id') as string;
 		if (!id) return fail(400, { error: 'missing id' });
-		await updateRoutineExercise(db, id, {
-			target_sets: Number(form.get('target_sets')) || 3,
-			rep_min: Number(form.get('rep_min')) || 6,
-			rep_max: Number(form.get('rep_max')) || 10
-		});
-		return { ok: true };
-	},
-	remove: async ({ request, platform }) => {
-		const db = getDb(platform);
-		const form = await request.formData();
-		const id = form.get('id') as string;
-		if (!id) return fail(400, { error: 'missing id' });
-		await deleteRoutineExercise(db, id);
-		return { ok: true };
-	},
-	add: async ({ request, platform }) => {
-		const db = getDb(platform);
-		const form = await request.formData();
-		const sessionId = form.get('session_id') as string;
-		const exerciseId = form.get('exercise_id') as string;
-		if (!sessionId || !exerciseId) return fail(400, { error: 'missing ids' });
-		await addRoutineExercise(db, sessionId, exerciseId, {
-			target_sets: 3,
-			rep_min: 8,
-			rep_max: 12,
-			rir_target: 2
-		});
-		return { ok: true };
-	},
-	swap: async ({ request, platform }) => {
-		const db = getDb(platform);
-		const form = await request.formData();
-		const id = form.get('id') as string;
-		const exerciseId = form.get('exercise_id') as string;
-		if (!id || !exerciseId) return fail(400, { error: 'missing ids' });
-		await updateRoutineExercise(db, id, { exercise_id: exerciseId });
+		const routine = (await listRoutines(db)).find((r) => r.id === id);
+		if (!routine) return fail(404, { error: 'No such routine.' });
+		if (routine.exercise_count === 0) {
+			return fail(400, { error: `"${routine.name}" has no exercises yet.` });
+		}
+		await activateRoutine(db, id);
 		return { ok: true };
 	}
 };

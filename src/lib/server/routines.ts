@@ -1,4 +1,5 @@
 import type { RoutineDraft } from '$lib/training/types';
+import { PROFILES } from '$lib/training/profiles';
 import type { ExerciseRow } from './catalog.ts';
 
 export interface RoutineExerciseRow {
@@ -37,6 +38,41 @@ function parseExercise(r: Record<string, unknown>): ExerciseRow {
 		secondary_muscles: JSON.parse((r.secondary_muscles as string) || '[]'),
 		unilateral: !!r.unilateral
 	};
+}
+
+/** A library row: enough to choose by, without hydrating every exercise. */
+export interface RoutineSummary {
+	id: string;
+	name: string;
+	profile_key: string;
+	is_active: boolean;
+	created_at: string;
+	session_count: number;
+	exercise_count: number;
+}
+
+export async function listRoutines(db: D1Database): Promise<RoutineSummary[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT r.id, r.name, r.profile_key, r.is_active, r.created_at,
+			        COUNT(DISTINCT rs.id) AS session_count,
+			        COUNT(re.id) AS exercise_count
+			 FROM routine r
+			 LEFT JOIN routine_session rs ON rs.routine_id = r.id
+			 LEFT JOIN routine_exercise re ON re.session_id = rs.id
+			 GROUP BY r.id
+			 ORDER BY r.is_active DESC, r.created_at DESC`
+		)
+		.all();
+	return (results as Record<string, unknown>[]).map((r) => ({
+		id: r.id as string,
+		name: r.name as string,
+		profile_key: r.profile_key as string,
+		is_active: !!r.is_active,
+		created_at: r.created_at as string,
+		session_count: r.session_count as number,
+		exercise_count: r.exercise_count as number
+	}));
 }
 
 export async function getActiveRoutine(db: D1Database): Promise<RoutineRow | null> {
@@ -105,15 +141,17 @@ export async function saveRoutineFromDraft(
 	db: D1Database,
 	draft: RoutineDraft,
 	name: string,
-	gymId: string
+	gymId: string | null,
+	activate = true
 ): Promise<string> {
 	const routineId = crypto.randomUUID();
-	const stmts = [
-		db.prepare('UPDATE routine SET is_active = 0 WHERE is_active = 1'),
+	const stmts: D1PreparedStatement[] = [];
+	if (activate) stmts.push(db.prepare('UPDATE routine SET is_active = 0 WHERE is_active = 1'));
+	stmts.push(
 		db
-			.prepare('INSERT INTO routine (id, name, profile_key, gym_id, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)')
-			.bind(routineId, name, draft.profile_key, gymId, new Date().toISOString())
-	];
+			.prepare('INSERT INTO routine (id, name, profile_key, gym_id, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.bind(routineId, name, draft.profile_key, gymId, activate ? 1 : 0, new Date().toISOString())
+	);
 	draft.sessions.forEach((session, si) => {
 		const sessionId = crypto.randomUUID();
 		stmts.push(
@@ -133,6 +171,135 @@ export async function saveRoutineFromDraft(
 	});
 	await db.batch(stmts);
 	return routineId;
+}
+
+/**
+ * A hydrated routine back into the shape the training core speaks, so the
+ * volume table and duplication both reuse code that already exists.
+ * Nulls coalesce to the profile's own numbers rather than to zero — a row
+ * predating a prescription must not read as free volume.
+ */
+export function routineToDraft(routine: RoutineRow): RoutineDraft {
+	const profile = PROFILES[routine.profile_key] ?? PROFILES.hypertrophy;
+	return {
+		profile_key: routine.profile_key,
+		warnings: [],
+		sessions: routine.sessions.map((s) => ({
+			name: s.name,
+			exercises: s.exercises.map((re) => ({
+				exercise: re.exercise,
+				target_sets: re.target_sets,
+				rep_min: re.rep_min ?? profile.isolation.rep_min,
+				rep_max: re.rep_max ?? profile.isolation.rep_max,
+				rir_target: re.rir_target ?? profile.rir
+			}))
+		}))
+	};
+}
+
+/**
+ * A blank routine, deliberately inactive: nothing you are still assembling
+ * should be what the home page offers you to train.
+ */
+export async function createRoutine(
+	db: D1Database,
+	name: string,
+	profileKey: string,
+	gymId: string
+): Promise<string> {
+	const id = crypto.randomUUID();
+	await db
+		.prepare(
+			'INSERT INTO routine (id, name, profile_key, gym_id, is_active, created_at) VALUES (?, ?, ?, ?, 0, ?)'
+		)
+		.bind(id, name, profileKey, gymId, new Date().toISOString())
+		.run();
+	return id;
+}
+
+export async function renameRoutine(db: D1Database, id: string, name: string): Promise<void> {
+	await db.prepare('UPDATE routine SET name = ? WHERE id = ?').bind(name, id).run();
+}
+
+export async function activateRoutine(db: D1Database, id: string): Promise<void> {
+	await db.batch([
+		db.prepare('UPDATE routine SET is_active = 0 WHERE is_active = 1'),
+		db.prepare('UPDATE routine SET is_active = 1 WHERE id = ?').bind(id)
+	]);
+}
+
+/**
+ * Deleting the active routine promotes the newest survivor. Otherwise a delete
+ * silently leaves the home page saying "No routine yet" while a library full of
+ * routines sits one tap away. Deleting the last one correctly lands there.
+ */
+export async function deleteRoutine(db: D1Database, id: string): Promise<void> {
+	const row = await db.prepare('SELECT is_active FROM routine WHERE id = ?').bind(id).first();
+	await db.prepare('DELETE FROM routine WHERE id = ?').bind(id).run();
+	if (!row?.is_active) return;
+	const next = await db
+		.prepare('SELECT id FROM routine ORDER BY created_at DESC LIMIT 1')
+		.first();
+	if (next) await activateRoutine(db, next.id as string);
+}
+
+/** An independent copy, inactive, so the original keeps training you. */
+export async function duplicateRoutine(db: D1Database, id: string): Promise<string | null> {
+	const routine = await getRoutine(db, id);
+	if (!routine) return null;
+	return saveRoutineFromDraft(db, routineToDraft(routine), `${routine.name} copy`, routine.gym_id, false);
+}
+
+export async function addRoutineSession(db: D1Database, routineId: string, name: string): Promise<void> {
+	const { results } = await db
+		.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM routine_session WHERE routine_id = ?')
+		.bind(routineId)
+		.all();
+	const pos = (results[0]?.pos as number) ?? 0;
+	await db
+		.prepare('INSERT INTO routine_session (id, routine_id, position, name) VALUES (?, ?, ?, ?)')
+		.bind(crypto.randomUUID(), routineId, pos, name)
+		.run();
+}
+
+export async function renameRoutineSession(db: D1Database, id: string, name: string): Promise<void> {
+	await db.prepare('UPDATE routine_session SET name = ? WHERE id = ?').bind(name, id).run();
+}
+
+/** routine_exercise cascades on the FK, so the day's exercises go with it. */
+export async function deleteRoutineSession(db: D1Database, id: string): Promise<void> {
+	await db.prepare('DELETE FROM routine_session WHERE id = ?').bind(id).run();
+}
+
+/** Swaps positions with the neighbour in `dir`. A no-op at either end. */
+export async function moveRoutineSession(
+	db: D1Database,
+	id: string,
+	dir: 'up' | 'down'
+): Promise<void> {
+	const me = await db
+		.prepare('SELECT routine_id, position FROM routine_session WHERE id = ?')
+		.bind(id)
+		.first();
+	if (!me) return;
+	const neighbour = await db
+		.prepare(
+			dir === 'up'
+				? 'SELECT id, position FROM routine_session WHERE routine_id = ? AND position < ? ORDER BY position DESC LIMIT 1'
+				: 'SELECT id, position FROM routine_session WHERE routine_id = ? AND position > ? ORDER BY position ASC LIMIT 1'
+		)
+		.bind(me.routine_id as string, me.position as number)
+		.all()
+		.then((r) => r.results[0] as Record<string, unknown> | undefined);
+	if (!neighbour) return;
+	await db.batch([
+		db
+			.prepare('UPDATE routine_session SET position = ? WHERE id = ?')
+			.bind(neighbour.position as number, id),
+		db
+			.prepare('UPDATE routine_session SET position = ? WHERE id = ?')
+			.bind(me.position as number, neighbour.id as string)
+	]);
 }
 
 export async function updateRoutineExercise(

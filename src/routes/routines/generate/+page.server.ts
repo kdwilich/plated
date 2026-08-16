@@ -62,7 +62,8 @@ export const actions: Actions = {
 			return fail(400, { error: 'Malformed draft.' });
 		}
 		const gym = await getGym(db);
-		await saveRoutineFromDraft(db, draft, name, gym.id);
-		redirect(303, '/routines');
+		const id = await saveRoutineFromDraft(db, draft, name, gym.id);
+		// Straight into the editor, holding the thing you just made.
+		redirect(303, `/routines/${id}`);
 	}
 };

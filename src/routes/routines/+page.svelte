@@ -1,264 +1,153 @@
 <script lang="ts">
+	// The library. Destructive actions are deliberately absent: delete and
+	// duplicate live in the editor, where you can see what you are acting on.
+	// A list of near-identical rows is the worst place for a delete button.
 	import { enhance } from '$app/forms';
-	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
-	import type { ExerciseRow } from '$lib/server/catalog';
 
-	let { data } = $props();
+	let { data, form } = $props();
 
-	let editingId = $state<string | null>(null);
-	let addingTo = $state<string | null>(null);
-	let swapping = $state<string | null>(null);
-
-	let addForm: HTMLFormElement | undefined = $state();
-	let swapForm: HTMLFormElement | undefined = $state();
-	let pickedExercise = $state<ExerciseRow | null>(null);
-
-	function pickForAdd(ex: ExerciseRow) {
-		pickedExercise = ex;
-		queueMicrotask(() => addForm?.requestSubmit());
-	}
-
-	function pickForSwap(ex: ExerciseRow) {
-		pickedExercise = ex;
-		queueMicrotask(() => swapForm?.requestSubmit());
-	}
+	const profileName = (key: string) => data.profiles.find((p) => p.key === key)?.name ?? key;
 </script>
 
-<svelte:head><title>Plateload — routine</title></svelte:head>
+<svelte:head><title>Plateload — routines</title></svelte:head>
 
-{#if data.routine}
-	<header class="head">
-		<h1 class="display">{data.routine.name}</h1>
-		<a class="btn quiet" href="/routines/generate">Regenerate</a>
-	</header>
-	<p class="label profile-line">
-		{data.profiles.find((p) => p.key === data.routine?.profile_key)?.name ?? data.routine.profile_key}
-		· <a href="/gym">gym setup</a>
-	</p>
+<h1 class="display page-title">Routines</h1>
 
-	{#each data.routine.sessions as session (session.id)}
-		<section class="session">
-			<h2 class="label">{session.name}</h2>
-			<div class="card">
-				{#each session.exercises as re (re.id)}
-					<div class="row">
-						{#if editingId === re.id}
-							<div class="edit-form">
-								<span class="edit-name">{re.exercise.name}</span>
-								<form
-									method="POST"
-									action="?/update"
-									class="edit-inner"
-									use:enhance={() => {
-										editingId = null;
-										return async ({ update }) => update();
-									}}
-								>
-									<input type="hidden" name="id" value={re.id} />
-									<div class="edit-fields">
-										<label><span class="label">Sets</span><input class="num" type="number" name="target_sets" value={re.target_sets} min="1" max="10" /></label>
-										<label><span class="label">Min</span><input class="num" type="number" name="rep_min" value={re.rep_min} min="1" max="30" /></label>
-										<label><span class="label">Max</span><input class="num" type="number" name="rep_max" value={re.rep_max} min="1" max="30" /></label>
-									</div>
-									<button class="btn primary" type="submit">Save</button>
-								</form>
-								<div class="edit-actions">
-									<button class="btn quiet" type="button" onclick={() => (swapping = swapping === re.id ? null : re.id)}>Swap</button>
-									<form
-										method="POST"
-										action="?/remove"
-										use:enhance={() => {
-											editingId = null;
-											return async ({ update }) => update();
-										}}
-									>
-										<input type="hidden" name="id" value={re.id} />
-										<button class="btn danger" type="submit">Remove</button>
-									</form>
-								</div>
-								{#if swapping === re.id}
-									<ExercisePicker
-										placeholder="Swap with…"
-										recommendFor={re.exercise_id}
-										sessionIds={session.exercises.map((e) => e.exercise_id)}
-										onpick={pickForSwap}
-									/>
-									<form
-										method="POST"
-										action="?/swap"
-										bind:this={swapForm}
-										use:enhance={() => {
-											swapping = null;
-											editingId = null;
-											return async ({ update }) => update();
-										}}
-									>
-										<input type="hidden" name="id" value={re.id} />
-										<input type="hidden" name="exercise_id" value={pickedExercise?.id ?? ''} />
-									</form>
-								{/if}
-							</div>
-						{:else}
-							<button class="row-btn" onclick={() => (editingId = re.id)}>
-								<span class="row-name">{re.exercise.name}</span>
-								<span class="row-rx num">{re.target_sets}×{re.rep_min}–{re.rep_max}</span>
-							</button>
-						{/if}
-					</div>
-				{/each}
+{#if form?.error}
+	<p class="error">{form.error}</p>
+{/if}
 
-				{#if addingTo === session.id}
-					<div class="add-area">
-						<ExercisePicker
-							sessionIds={session.exercises.map((e) => e.exercise_id)}
-							onpick={pickForAdd}
-						/>
-						<form
-							method="POST"
-							action="?/add"
-							bind:this={addForm}
-							use:enhance={() => {
-								addingTo = null;
-								return async ({ update }) => update();
-							}}
-						>
-							<input type="hidden" name="session_id" value={session.id} />
-							<input type="hidden" name="exercise_id" value={pickedExercise?.id ?? ''} />
-						</form>
-						<button class="btn quiet" onclick={() => (addingTo = null)}>Cancel</button>
-					</div>
-				{:else}
-					<button class="add-btn" onclick={() => (addingTo = session.id)}>+ Add exercise</button>
+{#if data.routines.length > 0}
+	<ul class="list">
+		{#each data.routines as r (r.id)}
+			<li class="card routine">
+				<a class="routine-main" href="/routines/{r.id}">
+					<span class="routine-head">
+						<span class="routine-name display">{r.name}</span>
+						{#if r.is_active}<span class="active-tag">Active</span>{/if}
+					</span>
+					<span class="routine-meta num">
+						{r.session_count}
+						{r.session_count === 1 ? 'day' : 'days'} · {r.exercise_count} exercises
+					</span>
+					<span class="routine-profile label">{profileName(r.profile_key)}</span>
+				</a>
+				{#if !r.is_active}
+					<form method="POST" action="?/activate" use:enhance>
+						<input type="hidden" name="id" value={r.id} />
+						<button class="btn quiet use" type="submit" disabled={r.exercise_count === 0}>Use</button>
+					</form>
 				{/if}
-			</div>
-		</section>
-	{/each}
+			</li>
+		{/each}
+	</ul>
 {:else}
 	<div class="card empty">
-		<p class="display empty-title">No routine yet</p>
-		<a class="btn primary" href="/routines/generate">Generate one</a>
+		<p class="display empty-title">No routines yet</p>
+		<p class="hint">
+			Generate one from what your gym actually has, or build your own day by day.
+		</p>
 	</div>
 {/if}
 
+<div class="new">
+	<a class="btn primary wide" href="/routines/generate">Generate a split</a>
+	<form method="POST" action="?/create" use:enhance>
+		<button class="btn wide" type="submit">Build from scratch</button>
+	</form>
+</div>
+
 <style lang="scss">
-	.head {
+	.page-title {
+		font-size: 30px;
+		margin-bottom: $space-4;
+	}
+
+	.error {
+		margin-bottom: $space-3;
+		font-size: 13px;
+		color: $signal;
+	}
+
+	.list {
+		display: flex;
+		flex-direction: column;
+		gap: $space-3;
+		margin-bottom: $space-5;
+	}
+
+	.routine {
+		display: flex;
+		align-items: stretch;
+	}
+
+	.routine-main {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		flex: 1;
+		min-width: 0;
+		padding: $space-3 $space-4;
+	}
+
+	.routine-head {
 		display: flex;
 		align-items: baseline;
-		justify-content: space-between;
-
-		h1 {
-			font-size: 30px;
-		}
-	}
-
-	.profile-line {
-		margin: $space-1 0 $space-4;
-
-		a {
-			color: $text-dim;
-			text-decoration: underline;
-		}
-	}
-
-	.session {
-		margin-bottom: $space-5;
-
-		h2 {
-			margin-bottom: $space-2;
-		}
-	}
-
-	.row {
-		border-bottom: 1px solid $hairline-faint;
-
-		&:last-of-type {
-			border-bottom: none;
-		}
-	}
-
-	.row-btn {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: $space-3;
-		width: 100%;
-		min-height: $tap-target;
-		padding: $space-2 $space-4;
-		text-align: left;
-	}
-
-	.row-name {
-		font-size: 14px;
-	}
-
-	.row-rx {
-		font-size: 13px;
-		color: $text-dim;
-		white-space: nowrap;
-	}
-
-	.edit-form {
-		display: flex;
-		flex-direction: column;
-		gap: $space-3;
-		padding: $space-3 $space-4;
-		background: $surface-raised;
-	}
-
-	.edit-inner {
-		display: flex;
-		flex-direction: column;
-		gap: $space-3;
-	}
-
-	.edit-name {
-		font-size: 14px;
-		font-weight: 500;
-	}
-
-	.edit-fields {
-		display: flex;
-		gap: $space-3;
-
-		label {
-			display: flex;
-			flex-direction: column;
-			gap: $space-1;
-			flex: 1;
-		}
-	}
-
-	.edit-actions {
-		display: flex;
 		gap: $space-2;
-
-		.btn {
-			flex: 1;
-		}
 	}
 
-	.add-btn {
-		width: 100%;
-		min-height: $tap-target;
+	.routine-name {
+		font-size: 20px;
+	}
+
+	.active-tag {
+		font-family: $font-mono;
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: $signal;
+	}
+
+	.routine-meta {
+		font-size: 12px;
+		color: $text-dim;
+	}
+
+	.routine-profile {
 		color: $text-faint;
-		font-size: 13px;
 	}
 
-	.add-area {
-		padding: $space-3 $space-4;
-		display: flex;
-		flex-direction: column;
-		gap: $space-3;
+	.use {
+		height: 100%;
+		border-left: 1px solid $hairline;
+		padding-inline: $space-4;
 	}
 
 	.empty {
-		padding: $space-5 $space-4;
 		display: flex;
 		flex-direction: column;
-		gap: $space-3;
+		gap: $space-2;
+		padding: $space-5 $space-4;
+		margin-bottom: $space-5;
 
 		.empty-title {
 			font-size: 26px;
 		}
+	}
+
+	.hint {
+		font-size: 13px;
+		color: $text-dim;
+		line-height: 1.5;
+	}
+
+	.new {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+	}
+
+	.wide {
+		width: 100%;
 	}
 </style>
