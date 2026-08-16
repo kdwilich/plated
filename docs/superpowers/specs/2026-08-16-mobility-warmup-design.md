@@ -42,8 +42,27 @@ export interface MobilityDrill {
 export function mobility(patterns: MovementPattern[]): MobilityDrill[];
 ```
 
-The input is the session's movement patterns, which the active session already
-holds for every prescribed exercise. Nothing new is stored or fetched.
+The input is the session's movement patterns.
+
+**Correction to an earlier assumption:** the active session does *not* currently
+hold them. `ActiveExercise` (`src/lib/client/session.ts:21`) carries name,
+measurement, equipment, mechanic and prescription, but no `movement_pattern`,
+and neither `/api/session-start` nor `/api/exercise-context` selects it. Three
+files need it plumbed through before `mobility()` has an input:
+
+- `src/lib/client/session.ts` — add `movement_pattern` to `ActiveExercise`
+- `src/routes/api/session-start/+server.ts` — add `e.movement_pattern` to the
+  SELECT and the row mapping
+- `src/routes/api/exercise-context/+server.ts` — add it to the JSON response
+
+Sessions already sitting in IndexedDB will not have the field, so `mobility()`
+accepts `(MovementPattern | null | undefined)[]` and filters. An in-progress
+workout keeps working; it just gets the general list until it is restarted.
+
+A freestyle session starts with zero exercises and gains them mid-session from
+the picker, so its list starts as opener plus always-on and grows as exercises
+are added. The card recomputes from `session.exercises` and needs no special
+casing for this.
 
 ## The map
 
