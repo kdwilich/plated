@@ -8,6 +8,7 @@
 	import { FORCES, primaryGroups, type Force } from '$lib/training/filters';
 	import { MAJOR_GROUPS } from '$lib/training/volume';
 	import type { ExerciseRow } from '$lib/server/catalog';
+	import GuideLink from '$lib/components/GuideLink.svelte';
 
 	let {
 		placeholder = 'Search exercises…',
@@ -15,6 +16,9 @@
 		recommendFor = null,
 		/** What the session already holds: the exclude list, and the day to match. */
 		sessionIds = [],
+		/** Off where picking already opens the guide, so the row isn't two doors
+		 *  to the same room. */
+		guideLinks = true,
 		onpick,
 		/** Fires when a query or filter is active, so a page can hide its own list. */
 		onnarrow
@@ -22,6 +26,7 @@
 		placeholder?: string;
 		recommendFor?: string | null;
 		sessionIds?: string[];
+		guideLinks?: boolean;
 		onpick: (e: ExerciseRow) => void;
 		onnarrow?: (narrowed: boolean) => void;
 	} = $props();
@@ -165,6 +170,9 @@
 						<span class="name">{ex.name}</span>
 						<span class="meta num">{subtitle(ex)}</span>
 					</button>
+					{#if guideLinks}
+						<GuideLink exerciseId={ex.id} name={ex.name} size={16} />
+					{/if}
 				</li>
 			{/each}
 		</ul>
@@ -226,15 +234,24 @@
 		background: $surface-raised;
 	}
 
+	// The row is the pick target plus an optional guide link, so the hairline
+	// belongs to the row rather than to the button inside it.
+	li {
+		display: flex;
+		align-items: stretch;
+		border-bottom: 1px solid $hairline-faint;
+	}
+
 	li button {
 		display: flex;
 		flex-direction: column;
+		justify-content: center;
 		gap: 2px;
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		min-height: $tap-target;
 		padding: $space-2 $space-3;
 		text-align: left;
-		border-bottom: 1px solid $hairline-faint;
 
 		&:active {
 			background: $hairline;

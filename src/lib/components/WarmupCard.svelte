@@ -2,6 +2,7 @@
 	// The general warm-up, above the first lift. warmup.ts ramps the bar; this
 	// gets you loose. Ticks are local to the session and never leave the device.
 	import type { MobilityDrill } from '$lib/training/mobility';
+	import GuideLink from '$lib/components/GuideLink.svelte';
 
 	let {
 		drills,
@@ -48,28 +49,7 @@
 						<span class="num dose">{d.dose}</span>
 					</button>
 					{#if d.exercise_id}
-						<a
-							class="guide-link"
-							href="/exercises/{d.exercise_id}"
-							aria-label="{d.name} guide"
-							title="Exercise guide"
-						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true"
-							>
-								<circle cx="12" cy="12" r="9" />
-								<line x1="12" y1="11" x2="12" y2="16.5" />
-								<circle cx="12" cy="7.5" r="0.5" fill="currentColor" stroke="none" />
-							</svg>
-						</a>
+						<GuideLink exerciseId={d.exercise_id} name={d.name} size={16} />
 					{/if}
 				</li>
 			{/each}
@@ -178,18 +158,4 @@
 		color: $text-dim;
 	}
 
-	.guide-link {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: $tap-target;
-		flex-shrink: 0;
-		color: $text-faint;
-		border-left: 1px solid $hairline-faint;
-
-		&:active {
-			background: $hairline;
-			color: $text-dim;
-		}
-	}
 </style>

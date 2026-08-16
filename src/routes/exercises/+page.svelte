@@ -32,6 +32,7 @@
 
 <ExercisePicker
 	placeholder="Search all exercises…"
+	guideLinks={false}
 	onpick={(ex) => goto(`/exercises/${ex.id}`)}
 	onnarrow={(v) => (picking = v)}
 />
