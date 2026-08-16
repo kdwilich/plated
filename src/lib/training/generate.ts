@@ -4,7 +4,7 @@
 
 import type { Exercise, MovementPattern, RoutineDraft, SessionDraft } from './types.ts';
 import { PROFILES } from './profiles.ts';
-import { muscleGroup, weeklySetsByGroup } from './volume.ts';
+import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup } from './volume.ts';
 
 export type SplitStyle = 'full_body' | 'targeted';
 
@@ -26,7 +26,15 @@ const opt = (s: Slot): Slot => ({ ...s, optional: true });
 // The press slot stays chest-dominant, because a session whose only press is
 // overhead trains shoulders and calls itself full body. Shoulders get their
 // own rotating slot instead.
-const FB_LEGS: MovementPattern[] = ['squat', 'hip_hinge', 'lunge', 'hip_thrust'];
+// Legs get two slots, knee-dominant and hip-dominant, because one rotating
+// leg slot cannot feed quads, hamstrings and glutes at once. Only hip_thrust
+// is glute-primary in the catalog — squat and lunge file under quads,
+// deadlift under lower back — so a single slot left glutes on secondary
+// credit alone. The press slot stays chest-dominant for the same reason: a
+// session whose only press is overhead trains shoulders and calls itself
+// full body. The pull index is offset so sessions do not all rhyme.
+const FB_KNEE: MovementPattern[] = ['squat', 'lunge'];
+const FB_HIP: MovementPattern[] = ['hip_thrust', 'hip_hinge'];
 const FB_PRESS: MovementPattern[] = ['horizontal_press', 'incline_press'];
 const FB_PULL: MovementPattern[] = ['horizontal_pull', 'vertical_pull'];
 const FB_SHOULDER: Slot[] = [c('vertical_press'), iso('lateral_raise'), iso('rear_delt')];
@@ -39,9 +47,10 @@ function fullBody(days: number): Template {
 	return Array.from({ length: days }, (_, n) => ({
 		name: `Full body ${String.fromCharCode(65 + n)}`,
 		slots: [
-			c(FB_LEGS[n % FB_LEGS.length]),
+			c(FB_KNEE[n % FB_KNEE.length]),
+			c(FB_HIP[n % FB_HIP.length]),
 			c(FB_PRESS[n % FB_PRESS.length]),
-			c(FB_PULL[n % FB_PULL.length]),
+			c(FB_PULL[(n + 1) % FB_PULL.length]),
 			FB_SHOULDER[n % FB_SHOULDER.length],
 			iso(FB_ISO[(n * 2) % FB_ISO.length]),
 			iso(FB_ISO[(n * 2 + 1) % FB_ISO.length])
@@ -53,12 +62,12 @@ function fullBody(days: number): Template {
 // session, at the cost of training each muscle less often.
 const PUSH_A = { name: 'Push', slots: [c('horizontal_press'), c('vertical_press'), c('incline_press'), iso('chest_fly'), iso('lateral_raise'), iso('triceps_extension')] };
 const PULL_A = { name: 'Pull', slots: [c('vertical_pull'), c('horizontal_pull'), iso('rear_delt'), iso('biceps_curl'), opt(iso('shrug'))] };
-const LEGS_A = { name: 'Legs', slots: [c('squat'), c('hip_hinge'), c('lunge'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] };
+const LEGS_A = { name: 'Legs', slots: [c('squat'), c('hip_hinge'), c('hip_thrust'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] };
 
 const TARGETED: Record<number, Template> = {
 	2: [
 		{ name: 'Upper', slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), iso('lateral_raise'), iso('biceps_curl'), iso('triceps_extension')] },
-		{ name: 'Lower', slots: [c('squat'), c('hip_hinge'), iso('leg_curl'), iso('leg_extension'), iso('calf_raise'), iso('ab_flexion')] }
+		{ name: 'Lower', slots: [c('squat'), c('hip_hinge'), c('hip_thrust'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] }
 	],
 	3: [PUSH_A, PULL_A, LEGS_A],
 	4: [
@@ -180,6 +189,23 @@ export function generate(input: GenerateInput): RoutineDraft {
 		);
 		if (!pick) break;
 		pick.target_sets += 1;
+	}
+
+	// The pass above can only add sets to an exercise that trains the group
+	// directly. A group with no direct work at all is invisible to it, so it
+	// would sit under target forever without anyone being told.
+	const finalVolume = weeklySetsByGroup(draft);
+	for (const group of MAJOR_GROUPS) {
+		const direct = all.some((pe) =>
+			pe.exercise.primary_muscles.some((m) => muscleGroup(m) === group)
+		);
+		if (direct) continue;
+		const indirect = finalVolume[group] ?? 0;
+		warnings.push(
+			indirect > 0
+				? `${group} only gets indirect work (${indirect} sets). Add a ${group} exercise if you want it trained directly.`
+				: `Nothing in this routine trains ${group}.`
+		);
 	}
 
 	return draft;

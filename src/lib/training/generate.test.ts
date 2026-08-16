@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generate, defaultSplitStyle } from './generate.ts';
-import { muscleGroup, weeklySetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
+import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
 import { PROFILES } from './profiles.ts';
 import type { Exercise, MovementPattern } from './types.ts';
 
@@ -10,7 +10,8 @@ function ex(
 	pattern: MovementPattern | null,
 	equipment: string,
 	muscles: string[],
-	priority = 50
+	priority = 50,
+	secondary: string[] = []
 ): Exercise {
 	n++;
 	return {
@@ -21,31 +22,32 @@ function ex(
 		progression: 'double',
 		equipment,
 		primary_muscles: muscles,
-		secondary_muscles: [],
+		secondary_muscles: secondary,
 		unilateral: false,
 		priority
 	};
 }
 
-// A small but complete catalog: one exercise per pattern in barbell/machine
-// flavors, plus unpatterned traps that must never surface.
+// A small but complete catalog, mirroring how the real dataset tags things:
+// compounds carry secondary muscles, and only hip_thrust is glute-primary.
+// Plus unpatterned traps that must never surface.
 function catalog(): Exercise[] {
 	return [
-		ex('squat', 'barbell', ['quadriceps'], 100),
-		ex('squat', 'machine', ['quadriceps'], 80),
-		ex('hip_hinge', 'barbell', ['hamstrings'], 100),
-		ex('hip_hinge', 'machine', ['hamstrings'], 60),
-		ex('horizontal_press', 'barbell', ['chest'], 100),
-		ex('horizontal_press', 'machine', ['chest'], 70),
-		ex('incline_press', 'dumbbell', ['chest'], 90),
-		ex('vertical_press', 'barbell', ['shoulders'], 90),
-		ex('vertical_press', 'machine', ['shoulders'], 60),
-		ex('horizontal_pull', 'barbell', ['middle back'], 95),
-		ex('horizontal_pull', 'cable', ['middle back'], 85),
-		ex('vertical_pull', 'cable', ['lats'], 90),
-		ex('vertical_pull', 'body only', ['lats'], 95),
-		ex('lunge', 'dumbbell', ['quadriceps'], 80),
-		ex('hip_thrust', 'barbell', ['glutes'], 90),
+		ex('squat', 'barbell', ['quadriceps'], 100, ['glutes', 'hamstrings']),
+		ex('squat', 'machine', ['quadriceps'], 80, ['glutes']),
+		ex('hip_hinge', 'barbell', ['hamstrings'], 100, ['glutes', 'lower back']),
+		ex('hip_hinge', 'machine', ['hamstrings'], 60, ['glutes']),
+		ex('horizontal_press', 'barbell', ['chest'], 100, ['triceps', 'shoulders']),
+		ex('horizontal_press', 'machine', ['chest'], 70, ['triceps']),
+		ex('incline_press', 'dumbbell', ['chest'], 90, ['shoulders', 'triceps']),
+		ex('vertical_press', 'barbell', ['shoulders'], 90, ['triceps']),
+		ex('vertical_press', 'machine', ['shoulders'], 60, ['triceps']),
+		ex('horizontal_pull', 'barbell', ['middle back'], 95, ['biceps']),
+		ex('horizontal_pull', 'cable', ['middle back'], 85, ['biceps']),
+		ex('vertical_pull', 'cable', ['lats'], 90, ['biceps']),
+		ex('vertical_pull', 'body only', ['lats'], 95, ['biceps']),
+		ex('lunge', 'dumbbell', ['quadriceps'], 80, ['glutes', 'hamstrings']),
+		ex('hip_thrust', 'barbell', ['glutes'], 90, ['hamstrings']),
 		ex('chest_fly', 'dumbbell', ['chest'], 80),
 		ex('lateral_raise', 'dumbbell', ['shoulders'], 90),
 		ex('rear_delt', 'cable', ['shoulders'], 85),
@@ -107,6 +109,99 @@ test('profile prescriptions land on the draft', () => {
 	assert.equal(compound.rep_min, PROFILES.strength.compound.rep_min);
 	assert.equal(compound.rep_max, PROFILES.strength.compound.rep_max);
 	assert.ok(compound.target_sets >= PROFILES.strength.compound.sets);
+});
+
+const directGroups = (draft: { sessions: { exercises: { exercise: Exercise }[] }[] }) => {
+	const found = new Set<string>();
+	for (const s of draft.sessions) {
+		for (const { exercise } of s.exercises) {
+			for (const m of exercise.primary_muscles) {
+				const g = muscleGroup(m);
+				if (g) found.add(g);
+			}
+		}
+	}
+	return found;
+};
+
+test('every major muscle group gets direct work from 3 days up, in both styles', () => {
+	for (const days of [3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			const covered = directGroups(draft);
+			for (const group of MAJOR_GROUPS) {
+				assert.ok(covered.has(group), `${group} has no direct work in a ${days}-day ${splitStyle} split`);
+			}
+		}
+	}
+});
+
+test('a 2-day split cannot cover everything, and says which group it dropped', () => {
+	// Twelve exercise slots will not give ten muscle groups direct work plus
+	// a compound base. What matters is that the gap is reported, not hidden.
+	for (const splitStyle of ['full_body', 'targeted'] as const) {
+		const draft = generate({ daysPerWeek: 2, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+		const covered = directGroups(draft);
+		for (const group of MAJOR_GROUPS) {
+			if (covered.has(group)) continue;
+			assert.ok(
+				draft.warnings.some((w) => w.includes(group)),
+				`${group} is uncovered in a 2-day ${splitStyle} split with no warning`
+			);
+		}
+	}
+});
+
+test('glutes are no longer the neglected outlier among leg muscles', () => {
+	// The regression this guards: glutes used to land at 4.5 weekly sets
+	// against 10.5 for quads, because only hip_thrust is glute-primary and
+	// no template reached it.
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			const vol = weeklySetsByGroup(draft);
+			const glutes = vol.glutes ?? 0;
+			const quads = vol.quads ?? 0;
+			assert.ok(
+				glutes >= quads * 0.7,
+				`${days}-day ${splitStyle}: glutes ${glutes} vs quads ${quads}`
+			);
+		}
+	}
+});
+
+test('glutes clear the profile minimum wherever the split structure allows', () => {
+	// A 3-day targeted split has exactly one leg day, so no leg muscle can
+	// reach the minimum there — that is the cost the split warning names.
+	const min = PROFILES.hypertrophy.weekly_sets_min;
+	const reachable: [number, 'full_body' | 'targeted'][] = [
+		[3, 'full_body'], [4, 'full_body'], [5, 'full_body'], [6, 'full_body'],
+		[4, 'targeted'], [5, 'targeted'], [6, 'targeted']
+	];
+	for (const [days, splitStyle] of reachable) {
+		const draft = generate({ daysPerWeek: days as 3 | 4 | 5 | 6, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+		const glutes = weeklySetsByGroup(draft).glutes ?? 0;
+		assert.ok(glutes >= min, `${days}-day ${splitStyle} gives glutes only ${glutes} sets`);
+	}
+});
+
+test('glutes always get direct work, even in a 2-day split', () => {
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			assert.ok(directGroups(draft).has('glutes'), `${days}-day ${splitStyle} has no glute-primary exercise`);
+		}
+	}
+});
+
+test('a group with no direct work produces a warning instead of failing silently', () => {
+	// A catalog with no glute-primary exercise at all.
+	const noGlutes = catalog().filter((e) => !e.primary_muscles.includes('glutes'));
+	const draft = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'full_body', catalog: noGlutes });
+	assert.ok(
+		draft.warnings.some((w) => w.includes('glutes')),
+		`expected a glutes warning, got: ${JSON.stringify(draft.warnings)}`
+	);
 });
 
 test('volume pass: a below-minimum group means all its direct exercises hit the cap', () => {

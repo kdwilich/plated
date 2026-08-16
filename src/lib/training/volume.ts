@@ -28,6 +28,20 @@ export function muscleGroup(muscle: string): string | null {
 	return GROUP[muscle] ?? null;
 }
 
+/** Every group a complete routine should train directly. */
+export const MAJOR_GROUPS = [
+	'chest',
+	'back',
+	'shoulders',
+	'quads',
+	'hamstrings',
+	'glutes',
+	'biceps',
+	'triceps',
+	'calves',
+	'abs'
+] as const;
+
 /**
  * Weekly sets per muscle group across a full pass of the rotation.
  * Primary muscles count full; secondaries count half — a bench press is
