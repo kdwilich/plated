@@ -1,13 +1,36 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { defaultSplitStyle, type SplitStyle } from '$lib/training/generate';
 
 	let { data, form } = $props();
 
 	let days = $state(4);
 	let profileKey = $state('hypertrophy');
+	let splitStyle = $state<SplitStyle>('targeted');
+	let touchedStyle = $state(false);
 	let generating = $state(false);
 
 	const selectedProfile = $derived(data.profiles.find((p) => p.key === profileKey));
+	const recommended = $derived(defaultSplitStyle(days));
+
+	// Follows the day count until you express a preference, then stays put.
+	function pickDays(d: number) {
+		days = d;
+		if (!touchedStyle) splitStyle = defaultSplitStyle(d);
+	}
+
+	const STYLES: { key: SplitStyle; name: string; blurb: string }[] = [
+		{
+			key: 'full_body',
+			name: 'Full body',
+			blurb: 'Every session trains everything, patterns rotating. Each muscle gets hit as often as you train, and a missed day costs a fraction of the week.'
+		},
+		{
+			key: 'targeted',
+			name: 'Targeted',
+			blurb: 'Each session owns a region — push/pull/legs or upper/lower. Shorter, more focused sessions; a missed day costs that region the whole week.'
+		}
+	];
 </script>
 
 <svelte:head><title>Plateload — generate</title></svelte:head>
@@ -34,11 +57,34 @@
 		<div class="day-picker">
 			{#each [2, 3, 4, 5, 6] as d (d)}
 				<label class="day" class:selected={days === d}>
-					<input type="radio" name="days" value={d} bind:group={days} />
+					<input type="radio" name="days" value={d} checked={days === d} onchange={() => pickDays(d)} />
 					<span class="num">{d}</span>
 				</label>
 			{/each}
 		</div>
+	</div>
+
+	<div class="field-block">
+		<span class="label">Split style</span>
+		{#each STYLES as s (s.key)}
+			<label class="profile" class:selected={splitStyle === s.key}>
+				<input
+					type="radio"
+					name="split_style"
+					value={s.key}
+					checked={splitStyle === s.key}
+					onchange={() => {
+						splitStyle = s.key;
+						touchedStyle = true;
+					}}
+				/>
+				<span class="profile-name">
+					{s.name}
+					{#if recommended === s.key}<span class="rec">recommended at {days} days</span>{/if}
+				</span>
+				<span class="style-blurb">{s.blurb}</span>
+			</label>
+		{/each}
 	</div>
 
 	<div class="field-block">
@@ -188,6 +234,21 @@
 	.profile-rx {
 		font-size: 11px;
 		color: $text-faint;
+	}
+
+	.style-blurb {
+		font-size: 12px;
+		color: $text-dim;
+		line-height: 1.45;
+	}
+
+	.rec {
+		font-family: $font-mono;
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: $signal;
+		margin-left: $space-2;
 	}
 
 	.rationale {

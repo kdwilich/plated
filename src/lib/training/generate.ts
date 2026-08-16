@@ -6,6 +6,8 @@ import type { Exercise, MovementPattern, RoutineDraft, SessionDraft } from './ty
 import { PROFILES } from './profiles.ts';
 import { muscleGroup, weeklySetsByGroup } from './volume.ts';
 
+export type SplitStyle = 'full_body' | 'targeted';
+
 interface Slot {
 	pattern: MovementPattern;
 	kind: 'compound' | 'isolation';
@@ -15,54 +17,110 @@ interface Slot {
 type Template = { name: string; slots: Slot[] }[];
 
 const c = (pattern: MovementPattern): Slot => ({ pattern, kind: 'compound' });
-const i = (pattern: MovementPattern): Slot => ({ pattern, kind: 'isolation' });
+const iso = (pattern: MovementPattern): Slot => ({ pattern, kind: 'isolation' });
 const opt = (s: Slot): Slot => ({ ...s, optional: true });
 
-const TEMPLATES: Record<number, Template> = {
+// Full body: every session trains everything, so each muscle is hit as often
+// as you train and a missed day costs a fraction of the week rather than all
+// of it. The patterns rotate, so three sessions is not three identical ones.
+// The press slot stays chest-dominant, because a session whose only press is
+// overhead trains shoulders and calls itself full body. Shoulders get their
+// own rotating slot instead.
+const FB_LEGS: MovementPattern[] = ['squat', 'hip_hinge', 'lunge', 'hip_thrust'];
+const FB_PRESS: MovementPattern[] = ['horizontal_press', 'incline_press'];
+const FB_PULL: MovementPattern[] = ['horizontal_pull', 'vertical_pull'];
+const FB_SHOULDER: Slot[] = [c('vertical_press'), iso('lateral_raise'), iso('rear_delt')];
+const FB_ISO: MovementPattern[] = [
+	'leg_curl', 'ab_flexion', 'biceps_curl',
+	'triceps_extension', 'leg_extension', 'calf_raise', 'chest_fly'
+];
+
+function fullBody(days: number): Template {
+	return Array.from({ length: days }, (_, n) => ({
+		name: `Full body ${String.fromCharCode(65 + n)}`,
+		slots: [
+			c(FB_LEGS[n % FB_LEGS.length]),
+			c(FB_PRESS[n % FB_PRESS.length]),
+			c(FB_PULL[n % FB_PULL.length]),
+			FB_SHOULDER[n % FB_SHOULDER.length],
+			iso(FB_ISO[(n * 2) % FB_ISO.length]),
+			iso(FB_ISO[(n * 2 + 1) % FB_ISO.length])
+		]
+	}));
+}
+
+// Targeted: each session owns a region. Fewer exercises per muscle per
+// session, at the cost of training each muscle less often.
+const PUSH_A = { name: 'Push', slots: [c('horizontal_press'), c('vertical_press'), c('incline_press'), iso('chest_fly'), iso('lateral_raise'), iso('triceps_extension')] };
+const PULL_A = { name: 'Pull', slots: [c('vertical_pull'), c('horizontal_pull'), iso('rear_delt'), iso('biceps_curl'), opt(iso('shrug'))] };
+const LEGS_A = { name: 'Legs', slots: [c('squat'), c('hip_hinge'), c('lunge'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] };
+
+const TARGETED: Record<number, Template> = {
 	2: [
-		{ name: 'Full body A', slots: [c('squat'), c('horizontal_press'), c('horizontal_pull'), i('leg_curl'), i('lateral_raise'), i('ab_flexion')] },
-		{ name: 'Full body B', slots: [c('hip_hinge'), c('vertical_press'), c('vertical_pull'), i('leg_extension'), i('biceps_curl'), i('triceps_extension')] }
+		{ name: 'Upper', slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), iso('lateral_raise'), iso('biceps_curl'), iso('triceps_extension')] },
+		{ name: 'Lower', slots: [c('squat'), c('hip_hinge'), iso('leg_curl'), iso('leg_extension'), iso('calf_raise'), iso('ab_flexion')] }
 	],
-	3: [
-		{ name: 'Full body A', slots: [c('squat'), c('horizontal_press'), c('horizontal_pull'), i('leg_curl'), i('lateral_raise'), i('ab_flexion')] },
-		{ name: 'Full body B', slots: [c('hip_hinge'), c('vertical_press'), c('vertical_pull'), i('leg_extension'), i('biceps_curl'), i('triceps_extension')] },
-		{ name: 'Full body C', slots: [c('lunge'), c('incline_press'), c('horizontal_pull'), c('hip_thrust'), i('chest_fly'), i('calf_raise')] }
-	],
+	3: [PUSH_A, PULL_A, LEGS_A],
 	4: [
-		{ name: 'Upper A', slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), i('biceps_curl'), i('triceps_extension')] },
-		{ name: 'Lower A', slots: [c('squat'), i('leg_curl'), c('hip_thrust'), i('calf_raise'), i('ab_flexion')] },
-		{ name: 'Upper B', slots: [c('incline_press'), c('horizontal_pull'), i('lateral_raise'), i('chest_fly'), i('rear_delt'), i('biceps_curl')] },
-		{ name: 'Lower B', slots: [c('hip_hinge'), c('lunge'), i('leg_extension'), i('calf_raise'), i('ab_flexion')] }
+		{ name: 'Upper A', slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), iso('biceps_curl'), iso('triceps_extension')] },
+		{ name: 'Lower A', slots: [c('squat'), iso('leg_curl'), c('hip_thrust'), iso('calf_raise'), iso('ab_flexion')] },
+		{ name: 'Upper B', slots: [c('incline_press'), c('horizontal_pull'), iso('lateral_raise'), iso('chest_fly'), iso('rear_delt'), iso('biceps_curl')] },
+		{ name: 'Lower B', slots: [c('hip_hinge'), c('lunge'), iso('leg_extension'), iso('calf_raise'), iso('ab_flexion')] }
 	],
-	5: pplTwice(),
-	6: pplTwice()
+	5: [
+		PUSH_A,
+		PULL_A,
+		LEGS_A,
+		{ name: 'Upper', slots: [c('incline_press'), c('horizontal_pull'), c('vertical_pull'), iso('lateral_raise'), iso('rear_delt'), iso('biceps_curl')] },
+		{ name: 'Lower', slots: [c('hip_thrust'), iso('leg_extension'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] }
+	],
+	6: [
+		{ name: 'Push A', slots: [c('horizontal_press'), c('vertical_press'), iso('chest_fly'), iso('triceps_extension'), iso('lateral_raise')] },
+		{ name: 'Pull A', slots: [c('vertical_pull'), c('horizontal_pull'), iso('rear_delt'), iso('biceps_curl'), opt(iso('shrug'))] },
+		{ name: 'Legs A', slots: [c('squat'), iso('leg_curl'), c('lunge'), iso('calf_raise'), iso('ab_flexion')] },
+		{ name: 'Push B', slots: [c('vertical_press'), c('incline_press'), iso('chest_fly'), iso('triceps_extension'), iso('lateral_raise')] },
+		{ name: 'Pull B', slots: [c('horizontal_pull'), c('vertical_pull'), opt(iso('pullover')), iso('biceps_curl'), iso('rear_delt')] },
+		{ name: 'Legs B', slots: [c('hip_hinge'), iso('leg_extension'), c('hip_thrust'), iso('calf_raise'), iso('ab_flexion')] }
+	]
 };
 
-function pplTwice(): Template {
-	return [
-		{ name: 'Push A', slots: [c('horizontal_press'), c('vertical_press'), i('chest_fly'), i('triceps_extension'), i('lateral_raise')] },
-		{ name: 'Pull A', slots: [c('vertical_pull'), c('horizontal_pull'), i('rear_delt'), i('biceps_curl'), opt(i('shrug'))] },
-		{ name: 'Legs A', slots: [c('squat'), i('leg_curl'), c('lunge'), i('calf_raise'), i('ab_flexion')] },
-		{ name: 'Push B', slots: [c('vertical_press'), c('incline_press'), i('chest_fly'), i('triceps_extension'), i('lateral_raise')] },
-		{ name: 'Pull B', slots: [c('horizontal_pull'), c('vertical_pull'), opt(i('pullover')), i('biceps_curl'), i('rear_delt')] },
-		{ name: 'Legs B', slots: [c('hip_hinge'), i('leg_extension'), c('hip_thrust'), i('calf_raise'), i('ab_flexion')] }
-	];
+/**
+ * Below 4 days a targeted split trains each muscle roughly once a week, and
+ * one missed session wipes that muscle out entirely — so full body is the
+ * better default there. At 4+ a targeted split still gets everything twice.
+ */
+export function defaultSplitStyle(daysPerWeek: number): SplitStyle {
+	return daysPerWeek <= 3 ? 'full_body' : 'targeted';
+}
+
+function templateFor(days: number, style: SplitStyle): Template {
+	if (style === 'full_body') return fullBody(days);
+	return TARGETED[days] ?? TARGETED[3];
 }
 
 export interface GenerateInput {
 	daysPerWeek: 2 | 3 | 4 | 5 | 6;
 	equipment: string[];
 	profileKey: string;
+	/** Defaults by day count — see defaultSplitStyle(). */
+	splitStyle?: SplitStyle;
 	/** Generator-eligible catalog: every entry must have a movement_pattern. */
 	catalog: Exercise[];
 }
 
 export function generate(input: GenerateInput): RoutineDraft {
 	const profile = PROFILES[input.profileKey] ?? PROFILES.hypertrophy;
-	const template = TEMPLATES[input.daysPerWeek] ?? TEMPLATES[3];
+	const style = input.splitStyle ?? defaultSplitStyle(input.daysPerWeek);
+	const template = templateFor(input.daysPerWeek, style);
 	const equipment = new Set(input.equipment);
 	const warnings: string[] = [];
 	const usedIds = new Set<string>();
+
+	if (style === 'targeted' && input.daysPerWeek <= 3) {
+		warnings.push(
+			`A ${input.daysPerWeek}-day targeted split trains each muscle about once a week, so a missed session costs that muscle the whole week. Full body spreads the same volume across every session.`
+		);
+	}
 
 	// The structural guard: nothing without a pattern can ever be picked,
 	// because candidates are keyed BY pattern.

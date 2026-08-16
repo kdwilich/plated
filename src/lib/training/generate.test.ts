@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generate } from './generate.ts';
+import { generate, defaultSplitStyle } from './generate.ts';
 import { muscleGroup, weeklySetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
 import { PROFILES } from './profiles.ts';
 import type { Exercise, MovementPattern } from './types.ts';
@@ -161,6 +161,75 @@ test('staleness counts whole days since the last time a group was trained', () =
 	assert.equal(s.quads, 8);
 	assert.equal(s.chest, 0);
 	assert.equal(s.back, undefined);
+});
+
+test('split style defaults to full body below 4 days, targeted at 4+', () => {
+	assert.equal(defaultSplitStyle(2), 'full_body');
+	assert.equal(defaultSplitStyle(3), 'full_body');
+	assert.equal(defaultSplitStyle(4), 'targeted');
+	assert.equal(defaultSplitStyle(6), 'targeted');
+});
+
+test('both styles produce exactly one session per training day', () => {
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			assert.equal(draft.sessions.length, days, `${splitStyle} at ${days} days gave ${draft.sessions.length} sessions`);
+		}
+	}
+});
+
+test('full body trains every major region in every session', () => {
+	const draft = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'full_body', catalog: catalog() });
+	for (const s of draft.sessions) {
+		const groups = new Set(groupsForSession(s));
+		for (const region of ['chest', 'back']) {
+			assert.ok(groups.has(region), `"${s.name}" has no ${region} work`);
+		}
+		const legs = ['quads', 'hamstrings', 'glutes'].some((g) => groups.has(g));
+		assert.ok(legs, `"${s.name}" has no leg work`);
+		assert.ok(groups.has('shoulders'), `"${s.name}" has no shoulder work`);
+	}
+});
+
+test('full body rotates patterns so sessions are not duplicates', () => {
+	const draft = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'full_body', catalog: catalog() });
+	const signatures = draft.sessions.map((s) => s.exercises.map((e) => e.exercise.movement_pattern).join(','));
+	assert.equal(new Set(signatures).size, signatures.length, 'two full body sessions are identical');
+});
+
+test('targeted splits each session by region, not everything at once', () => {
+	const draft = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', catalog: catalog() });
+	assert.deepEqual(draft.sessions.map((s) => s.name), ['Push', 'Pull', 'Legs']);
+	// Leg day does no chest work, and push day does no leg work.
+	const legs = new Set(groupsForSession(draft.sessions[2]));
+	assert.ok(!legs.has('chest'));
+	const push = new Set(groupsForSession(draft.sessions[0]));
+	assert.ok(!push.has('quads') && !push.has('hamstrings'));
+});
+
+test('a low-frequency targeted split warns about the missed-day cost', () => {
+	const targeted = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', catalog: catalog() });
+	assert.ok(targeted.warnings.some((w) => w.includes('once a week')));
+
+	const fullBody = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'full_body', catalog: catalog() });
+	assert.ok(!fullBody.warnings.some((w) => w.includes('once a week')));
+
+	const fiveDay = generate({ daysPerWeek: 5, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', catalog: catalog() });
+	assert.ok(!fiveDay.warnings.some((w) => w.includes('once a week')));
+});
+
+test('the NULL-pattern guard holds for both styles', () => {
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			for (const s of draft.sessions) {
+				for (const { exercise } of s.exercises) {
+					assert.notEqual(exercise.movement_pattern, null, `${exercise.name} leaked into ${splitStyle} "${s.name}"`);
+				}
+			}
+		}
+	}
 });
 
 test('rotation is cyclic and starts at the top', () => {
