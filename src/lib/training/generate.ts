@@ -7,6 +7,7 @@ import { PROFILES } from './profiles.ts';
 import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup } from './volume.ts';
 
 export type SplitStyle = 'full_body' | 'targeted';
+export type Emphasis = 'balanced' | 'lower' | 'upper';
 
 interface Slot {
 	pattern: MovementPattern;
@@ -107,12 +108,124 @@ function templateFor(days: number, style: SplitStyle): Template {
 	return TARGETED[days] ?? TARGETED[3];
 }
 
+// ---------------------------------------------------------------------------
+// Physique emphasis. Not a demographic guess — an explicit statement of what
+// you want more of. The emphasized region gains an exercise slot per session
+// (where one fits) and a higher weekly volume target; the other region drops
+// one isolation per session and runs at maintenance volume. Compounds are
+// never removed: de-emphasis means maintenance, not neglect.
+
+const LOWER_PATTERNS = new Set<MovementPattern>([
+	'squat', 'hip_hinge', 'hip_thrust', 'lunge', 'leg_curl', 'leg_extension', 'calf_raise'
+]);
+const CORE_PATTERNS = new Set<MovementPattern>(['ab_flexion', 'anti_extension', 'loaded_carry']);
+
+function slotRegion(pattern: MovementPattern): 'lower' | 'upper' | 'core' {
+	if (LOWER_PATTERNS.has(pattern)) return 'lower';
+	if (CORE_PATTERNS.has(pattern)) return 'core';
+	return 'upper';
+}
+
+export const LOWER_GROUPS = new Set(['quads', 'hamstrings', 'glutes', 'calves']);
+export const UPPER_GROUPS = new Set(['chest', 'back', 'shoulders', 'biceps', 'triceps']);
+
+const LOWER_EXTRAS: Slot[] = [
+	c('hip_thrust'), iso('leg_curl'), iso('leg_extension'), c('lunge'), iso('calf_raise')
+];
+const UPPER_EXTRAS: Slot[] = [
+	iso('chest_fly'), iso('lateral_raise'), iso('biceps_curl'), iso('triceps_extension'), iso('rear_delt')
+];
+
+// Which muscle group a slot is direct work FOR, so de-emphasis can cut the
+// accessory whose muscle keeps direct work elsewhere in the week, instead of
+// blindly zeroing whatever iso happens to sit last.
+const PATTERN_GROUP: Record<MovementPattern, string> = {
+	horizontal_press: 'chest',
+	incline_press: 'chest',
+	chest_fly: 'chest',
+	vertical_press: 'shoulders',
+	lateral_raise: 'shoulders',
+	rear_delt: 'shoulders',
+	horizontal_pull: 'back',
+	vertical_pull: 'back',
+	shrug: 'back',
+	pullover: 'back',
+	biceps_curl: 'biceps',
+	triceps_extension: 'triceps',
+	squat: 'quads',
+	lunge: 'quads',
+	leg_extension: 'quads',
+	hip_hinge: 'hamstrings',
+	leg_curl: 'hamstrings',
+	hip_thrust: 'glutes',
+	calf_raise: 'calves',
+	ab_flexion: 'abs',
+	anti_extension: 'abs',
+	loaded_carry: 'abs'
+};
+
+function applyEmphasis(template: Template, emphasis: Emphasis): Template {
+	if (emphasis === 'balanced') return template;
+	const extras = emphasis === 'lower' ? LOWER_EXTRAS : UPPER_EXTRAS;
+	const opposite = emphasis === 'lower' ? 'upper' : 'lower';
+
+	// Direct slots per group across the whole week, decremented as we cut.
+	const weekCount = new Map<string, number>();
+	for (const t of template) {
+		for (const s of t.slots) {
+			const g = PATTERN_GROUP[s.pattern];
+			weekCount.set(g, (weekCount.get(g) ?? 0) + 1);
+		}
+	}
+
+	return template.map((t, n) => {
+		const slots = [...t.slots];
+
+		// Drop one isolation of the de-emphasized region — choosing the one
+		// whose muscle keeps the most direct work elsewhere in the week.
+		let cut = -1;
+		let cutCount = -1;
+		for (let j = 0; j < slots.length; j++) {
+			if (slots[j].kind !== 'isolation' || slotRegion(slots[j].pattern) !== opposite) continue;
+			const remaining = weekCount.get(PATTERN_GROUP[slots[j].pattern]) ?? 0;
+			if (remaining > cutCount) {
+				cutCount = remaining;
+				cut = j;
+			}
+		}
+		if (cut >= 0) {
+			const g = PATTERN_GROUP[slots[cut].pattern];
+			weekCount.set(g, (weekCount.get(g) ?? 0) - 1);
+			slots.splice(cut, 1);
+		}
+
+		// Add an emphasized slot the session doesn't already have — but only to
+		// sessions that train the region at all, so a targeted split's pull day
+		// doesn't sprout a leg press.
+		const trainsRegion = slots.some((s) => slotRegion(s.pattern) === emphasis);
+		if (trainsRegion) {
+			const present = new Set(slots.map((s) => s.pattern));
+			for (let k = 0; k < extras.length; k++) {
+				const candidate = extras[(n + k) % extras.length];
+				if (!present.has(candidate.pattern)) {
+					slots.push(candidate);
+					break;
+				}
+			}
+		}
+
+		return { name: t.name, slots };
+	});
+}
+
 export interface GenerateInput {
 	daysPerWeek: 2 | 3 | 4 | 5 | 6;
 	equipment: string[];
 	profileKey: string;
 	/** Defaults by day count — see defaultSplitStyle(). */
 	splitStyle?: SplitStyle;
+	/** What you want more of. Explicitly chosen, never inferred. */
+	emphasis?: Emphasis;
 	/** Generator-eligible catalog: every entry must have a movement_pattern. */
 	catalog: Exercise[];
 }
@@ -120,7 +233,8 @@ export interface GenerateInput {
 export function generate(input: GenerateInput): RoutineDraft {
 	const profile = PROFILES[input.profileKey] ?? PROFILES.hypertrophy;
 	const style = input.splitStyle ?? defaultSplitStyle(input.daysPerWeek);
-	const template = templateFor(input.daysPerWeek, style);
+	const emphasis = input.emphasis ?? 'balanced';
+	const template = applyEmphasis(templateFor(input.daysPerWeek, style), emphasis);
 	const equipment = new Set(input.equipment);
 	const warnings: string[] = [];
 	const usedIds = new Set<string>();
@@ -172,19 +286,31 @@ export function generate(input: GenerateInput): RoutineDraft {
 
 	const draft: RoutineDraft = { profile_key: profile.key, sessions, warnings };
 
-	// Volume pass: groups with direct work but below the profile's weekly
-	// minimum get extra sets, up to a per-exercise cap. Groups nothing
-	// targets already produced a slot warning above.
+	// Volume pass: groups with direct work but below their weekly target get
+	// extra sets, up to a per-exercise cap. The target moves with emphasis:
+	// emphasized groups aim for the middle of the profile's range, the
+	// de-emphasized region runs at maintenance, everything else at the
+	// profile minimum. Groups nothing targets produced a slot warning above.
+	const mid = Math.round((profile.weekly_sets_min + profile.weekly_sets_max) / 2);
+	const maintenance = Math.max(4, Math.round(profile.weekly_sets_min * 0.6));
+	const targetFor = (group: string): number => {
+		if (emphasis === 'balanced') return profile.weekly_sets_min;
+		const inLower = LOWER_GROUPS.has(group);
+		const inUpper = UPPER_GROUPS.has(group);
+		if (emphasis === 'lower') return inLower ? mid : inUpper ? maintenance : profile.weekly_sets_min;
+		return inUpper ? mid : inLower ? maintenance : profile.weekly_sets_min;
+	};
+
 	const cap = Math.max(profile.compound.sets, profile.isolation.sets) + 2;
 	const all = draft.sessions.flatMap((s) => s.exercises);
-	for (let iter = 0; iter < 60; iter++) {
+	for (let iter = 0; iter < 80; iter++) {
 		const vol = weeklySetsByGroup(draft);
 		const pick = all.find(
 			(pe) =>
 				pe.target_sets < cap &&
 				pe.exercise.primary_muscles.some((m) => {
 					const g = muscleGroup(m);
-					return g !== null && (vol[g] ?? 0) < profile.weekly_sets_min;
+					return g !== null && (vol[g] ?? 0) < targetFor(g);
 				})
 		);
 		if (!pick) break;

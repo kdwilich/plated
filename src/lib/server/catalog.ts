@@ -85,10 +85,12 @@ export async function listExercises(
 		where.push('equipment = ?');
 		binds.push(opts.equipment);
 	}
+	// Alphabetical: this feeds the browse list, where you are looking a name
+	// up. Search results stay ranked by priority, which is a relevance order.
 	const sql =
 		`SELECT ${COLS} FROM exercise` +
 		(where.length ? ` WHERE ${where.join(' AND ')}` : '') +
-		` ORDER BY priority DESC, name LIMIT ? OFFSET ?`;
+		` ORDER BY name COLLATE NOCASE LIMIT ? OFFSET ?`;
 	binds.push(opts.limit ?? 100, opts.offset ?? 0);
 	const { results } = await db.prepare(sql).bind(...binds).all();
 	return results.map(rowToExercise);

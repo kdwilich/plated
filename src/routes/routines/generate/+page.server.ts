@@ -4,7 +4,7 @@ import { getDb } from '$lib/server/db';
 import { getGym } from '$lib/server/gym';
 import { generatorCatalog } from '$lib/server/catalog';
 import { saveRoutineFromDraft } from '$lib/server/routines';
-import { defaultSplitStyle, generate, type SplitStyle } from '$lib/training/generate';
+import { defaultSplitStyle, generate, type Emphasis, type SplitStyle } from '$lib/training/generate';
 import { weeklySetsByGroup } from '$lib/training/volume';
 import { PROFILES } from '$lib/training/profiles';
 import type { RoutineDraft } from '$lib/training/types';
@@ -26,6 +26,9 @@ export const actions: Actions = {
 		const raw = form.get('split_style') as string | null;
 		const splitStyle: SplitStyle =
 			raw === 'full_body' || raw === 'targeted' ? raw : defaultSplitStyle(days);
+		const rawEmphasis = form.get('emphasis') as string | null;
+		const emphasis: Emphasis =
+			rawEmphasis === 'lower' || rawEmphasis === 'upper' ? rawEmphasis : 'balanced';
 
 		const gym = await getGym(db);
 		const catalog = await generatorCatalog(db);
@@ -34,6 +37,7 @@ export const actions: Actions = {
 			equipment: gym.equipment,
 			profileKey,
 			splitStyle,
+			emphasis,
 			catalog
 		});
 		return {
@@ -41,7 +45,8 @@ export const actions: Actions = {
 			volume: weeklySetsByGroup(draft),
 			profile: PROFILES[profileKey],
 			days,
-			splitStyle
+			splitStyle,
+			emphasis
 		};
 	},
 	save: async ({ request, platform }) => {

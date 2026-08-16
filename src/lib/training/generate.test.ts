@@ -314,16 +314,90 @@ test('a low-frequency targeted split warns about the missed-day cost', () => {
 	assert.ok(!fiveDay.warnings.some((w) => w.includes('once a week')));
 });
 
-test('the NULL-pattern guard holds for both styles', () => {
+test('the NULL-pattern guard holds for every style and emphasis', () => {
 	for (const days of [2, 3, 4, 5, 6] as const) {
 		for (const splitStyle of ['full_body', 'targeted'] as const) {
-			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
-			for (const s of draft.sessions) {
-				for (const { exercise } of s.exercises) {
-					assert.notEqual(exercise.movement_pattern, null, `${exercise.name} leaked into ${splitStyle} "${s.name}"`);
+			for (const emphasis of ['balanced', 'lower', 'upper'] as const) {
+				const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis, catalog: catalog() });
+				assert.equal(draft.sessions.length, days);
+				for (const s of draft.sessions) {
+					for (const { exercise } of s.exercises) {
+						assert.notEqual(exercise.movement_pattern, null, `${exercise.name} leaked into ${splitStyle}/${emphasis} "${s.name}"`);
+					}
 				}
 			}
 		}
+	}
+});
+
+function regionVolume(draft: Parameters<typeof weeklySetsByGroup>[0]) {
+	const vol = weeklySetsByGroup(draft);
+	const sum = (groups: string[]) => groups.reduce((s, g) => s + (vol[g] ?? 0), 0);
+	return {
+		lower: sum(['quads', 'hamstrings', 'glutes', 'calves']),
+		upper: sum(['chest', 'back', 'shoulders', 'biceps', 'triceps'])
+	};
+}
+
+test('lower emphasis shifts weekly volume toward the lower body', () => {
+	for (const splitStyle of ['full_body', 'targeted'] as const) {
+		const balanced = regionVolume(generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis: 'balanced', catalog: catalog() }));
+		const lower = regionVolume(generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis: 'lower', catalog: catalog() }));
+		assert.ok(lower.lower > balanced.lower, `${splitStyle}: lower volume ${lower.lower} not above balanced ${balanced.lower}`);
+		assert.ok(lower.upper <= balanced.upper, `${splitStyle}: upper volume ${lower.upper} rose above balanced ${balanced.upper}`);
+	}
+});
+
+test('upper emphasis shifts weekly volume toward the upper body', () => {
+	for (const splitStyle of ['full_body', 'targeted'] as const) {
+		const balanced = regionVolume(generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis: 'balanced', catalog: catalog() }));
+		const upper = regionVolume(generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis: 'upper', catalog: catalog() }));
+		assert.ok(upper.upper > balanced.upper, `${splitStyle}: upper volume ${upper.upper} not above balanced ${balanced.upper}`);
+		assert.ok(upper.lower <= balanced.lower, `${splitStyle}: lower volume ${upper.lower} rose above balanced ${balanced.lower}`);
+	}
+});
+
+test('emphasis changes the exercises, not just the set counts', () => {
+	const names = (d: ReturnType<typeof generate>) =>
+		new Set(d.sessions.flatMap((s) => s.exercises.map((e) => e.exercise.id)));
+	const balanced = names(generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'full_body', emphasis: 'balanced', catalog: catalog() }));
+	const lower = names(generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'full_body', emphasis: 'lower', catalog: catalog() }));
+	const gained = [...lower].filter((id) => !balanced.has(id));
+	assert.ok(gained.length > 0, 'lower emphasis picked no exercise the balanced split lacks');
+});
+
+test('de-emphasis is maintenance, not neglect: compounds survive and no region hits zero', () => {
+	for (const emphasis of ['lower', 'upper'] as const) {
+		const draft = generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', emphasis, catalog: catalog() });
+		const { lower, upper } = regionVolume(draft);
+		assert.ok(lower > 0 && upper > 0, `${emphasis} emphasis zeroed a region (lower ${lower}, upper ${upper})`);
+		// The de-emphasized region keeps its compound slots.
+		const deEmph = emphasis === 'lower' ? ['chest', 'lats', 'middle back', 'shoulders'] : ['quadriceps', 'hamstrings', 'glutes'];
+		const compounds = draft.sessions
+			.flatMap((s) => s.exercises)
+			.filter((pe) => pe.exercise.primary_muscles.some((m) => deEmph.includes(m)));
+		assert.ok(compounds.length > 0, `${emphasis} emphasis removed every de-emphasized exercise`);
+	}
+});
+
+test('emphasis never duplicates a pattern within a session', () => {
+	for (const splitStyle of ['full_body', 'targeted'] as const) {
+		for (const emphasis of ['lower', 'upper'] as const) {
+			const draft = generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis, catalog: catalog() });
+			for (const s of draft.sessions) {
+				const patterns = s.exercises.map((e) => e.exercise.movement_pattern);
+				assert.equal(new Set(patterns).size, patterns.length, `duplicate pattern in ${splitStyle}/${emphasis} "${s.name}": ${patterns.join(', ')}`);
+			}
+		}
+	}
+});
+
+test('full body with upper emphasis still trains legs every session', () => {
+	const draft = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'full_body', emphasis: 'upper', catalog: catalog() });
+	for (const s of draft.sessions) {
+		const groups = new Set(groupsForSession(s));
+		const legs = ['quads', 'hamstrings', 'glutes'].some((g) => groups.has(g));
+		assert.ok(legs, `"${s.name}" lost its leg work to upper emphasis`);
 	}
 });
 

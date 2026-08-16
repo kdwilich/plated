@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { defaultSplitStyle, type SplitStyle } from '$lib/training/generate';
+	import { defaultSplitStyle, type Emphasis, type SplitStyle } from '$lib/training/generate';
 
 	let { data, form } = $props();
 
@@ -29,6 +29,26 @@
 			key: 'targeted',
 			name: 'Targeted',
 			blurb: 'Each session owns a region — push/pull/legs or upper/lower. Shorter, more focused sessions; a missed day costs that region the whole week.'
+		}
+	];
+
+	let emphasis = $state<Emphasis>('balanced');
+
+	const EMPHASES: { key: Emphasis; name: string; blurb: string }[] = [
+		{
+			key: 'balanced',
+			name: 'Balanced',
+			blurb: 'Even volume across the whole body.'
+		},
+		{
+			key: 'lower',
+			name: 'Lower body focus',
+			blurb: 'Extra glute, hamstring, quad, and calf work each session, with higher weekly targets. Upper body keeps its compounds at maintenance volume.'
+		},
+		{
+			key: 'upper',
+			name: 'Upper body focus',
+			blurb: 'Extra chest, back, shoulder, and arm work each session, with higher weekly targets. Lower body keeps its compounds at maintenance volume.'
 		}
 	];
 </script>
@@ -83,6 +103,23 @@
 					{#if recommended === s.key}<span class="rec">recommended at {days} days</span>{/if}
 				</span>
 				<span class="style-blurb">{s.blurb}</span>
+			</label>
+		{/each}
+	</div>
+
+	<div class="field-block">
+		<span class="label">Physique emphasis</span>
+		{#each EMPHASES as e (e.key)}
+			<label class="profile" class:selected={emphasis === e.key}>
+				<input
+					type="radio"
+					name="emphasis"
+					value={e.key}
+					checked={emphasis === e.key}
+					onchange={() => (emphasis = e.key)}
+				/>
+				<span class="profile-name">{e.name}</span>
+				<span class="style-blurb">{e.blurb}</span>
 			</label>
 		{/each}
 	</div>
