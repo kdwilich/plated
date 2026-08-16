@@ -10,9 +10,9 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"test": "node --test \"src/lib/training/**/*.test.ts\"",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"dev:wrangler": "node scripts/dev-wrangler.mjs",
+		"dev:wrangler": "vite build && wrangler dev",
 		"seed": "node scripts/seed-exercises.mjs",
-		"deploy": "vite build && wrangler pages deploy .svelte-kit/cloudflare --project-name=plateload"
+		"deploy": "vite build && wrangler deploy"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "^7.2.8",

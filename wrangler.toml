@@ -1,10 +1,14 @@
 name = "plateload"
+main = ".svelte-kit/cloudflare/_worker.js"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".svelte-kit/cloudflare"
 
-# `npm run dev:wrangler` ignores database_id and uses a local sqlite copy
-# keyed by the binding name; --remote commands and deploys use the real id.
+[assets]
+binding = "ASSETS"
+directory = ".svelte-kit/cloudflare"
+
+# `npm run dev` ignores database_id and uses a local sqlite copy keyed by the
+# binding name; --remote commands and deploys use the real one.
 [[d1_databases]]
 binding = "DB"
 database_name = "plateload-db"
