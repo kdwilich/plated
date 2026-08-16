@@ -7,6 +7,15 @@ declare global {
 				DB: D1Database;
 			};
 		}
+
+		/** Shallow-routed state. `guide` holds the /exercises/[id] load result,
+		 *  so the guide can open as a modal without unmounting the page. */
+		interface PageState {
+			guide?: {
+				exercise: import('$lib/server/catalog').ExerciseRow;
+				history: import('$lib/training/types').LoggedSet[][];
+			};
+		}
 	}
 }
 

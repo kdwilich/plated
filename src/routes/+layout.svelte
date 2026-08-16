@@ -5,6 +5,8 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { installDrainTriggers, persistStorage } from '$lib/client/session';
+	import GuideModal from '$lib/components/GuideModal.svelte';
+	import ExerciseGuide from '$lib/components/ExerciseGuide.svelte';
 
 	let { children } = $props();
 
@@ -36,6 +38,18 @@
 		{/each}
 	</nav>
 </div>
+
+<!-- Lives in the layout so every GuideLink gets it without its host wiring
+     anything up. Closing is history.back(), so the entry pushState created is
+     consumed rather than stranded. -->
+{#if page.state.guide}
+	<GuideModal onclose={() => history.back()}>
+		<ExerciseGuide
+			exercise={page.state.guide.exercise}
+			history={page.state.guide.history}
+		/>
+	</GuideModal>
+{/if}
 
 <style lang="scss">
 	.shell {

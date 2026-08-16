@@ -2,15 +2,42 @@
 	// The ⓘ that opens an exercise's guide. Wherever an exercise is named and
 	// acting on it costs something — logging, adding, swapping — this is the way
 	// to go read what it is first.
+	//
+	// It opens as a modal via shallow routing rather than navigating, because
+	// navigating away unmounts the page: a half-finished swap, its query and its
+	// filters would all be gone by the time you came back. The href stays real,
+	// so open-in-new-tab, no-JS and deep links all still work.
+	import { preloadData, pushState, goto } from '$app/navigation';
 
 	let {
 		exerciseId,
 		name,
 		size = 18
 	}: { exerciseId: string; name: string; size?: number } = $props();
+
+	async function open(e: MouseEvent & { currentTarget: HTMLAnchorElement }) {
+		// Let the browser do its thing for new-tab/new-window modifier clicks.
+		if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey || e.button !== 0) return;
+		e.preventDefault();
+
+		const { href } = e.currentTarget;
+		const result = await preloadData(href);
+		if (result.type === 'loaded' && result.status === 200) {
+			pushState(href, { guide: result.data as App.PageState['guide'] });
+		} else {
+			// Preload failed — a real navigation still beats doing nothing.
+			await goto(href);
+		}
+	}
 </script>
 
-<a class="guide-link" href="/exercises/{exerciseId}" aria-label="{name} guide" title="Exercise guide">
+<a
+	class="guide-link"
+	href="/exercises/{exerciseId}"
+	aria-label="{name} guide"
+	title="Exercise guide"
+	onclick={open}
+>
 	<svg
 		width={size}
 		height={size}
