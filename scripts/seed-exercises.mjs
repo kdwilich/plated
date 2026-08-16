@@ -68,7 +68,15 @@ const ELIGIBLE_EQ = new Set([
 const EXCLUDE = /with chains|with bands|smith|band assisted|axle|car deadlift|guillotine|jm press|rack pull|sled|zercher|jefferson|frankenstein|kneeling squat|jerk/i;
 
 const PATTERN_RULES = [
-	[/upright row/i, null],
+	// "Upright row" only matched the literal substring "upright row" — dataset
+	// names like "Upright Barbell Row" have a word in between, so the exclusion
+	// never fired and these fell through to the generic row rule below.
+	[/upright/i, null],
+	// Turkish get-ups are a full-body/shoulder-stability movement (primary
+	// muscle is shoulders), not a leg-pattern exercise — the "(Squat style)" /
+	// "(Lunge style)" naming would otherwise get caught by the squat/lunge
+	// rules further down purely on the literal word match.
+	[/turkish get-?up/i, null],
 	[/wrist|finger/i, null],
 	[/push-?up/i, 'horizontal_press'],
 	[/incline.*(bench|press)|(bench|press).*incline/i, (e) => (has(e, 'chest') ? 'incline_press' : null)],
@@ -78,9 +86,18 @@ const PATTERN_RULES = [
 	[/shoulder press|military press|overhead press|push press|arnold press/i, 'vertical_press'],
 	[/pulldown|pull-?up|pullup|chin-?up|chinup/i, 'vertical_pull'],
 	[/pullover/i, 'pullover'],
+	// "Incline Pushdown" is a straight-arm cable pullover variant (lats), not
+	// a triceps movement — the generic pushdown rule below would misclassify
+	// it as triceps_extension despite training no triceps at all.
+	[/incline.*pushdown/i, 'pullover'],
 	[/face pull/i, 'rear_delt'],
 	[/shrug/i, 'shrug'],
-	[/row/i, 'horizontal_pull'],
+	// Rear-delt-focused rows train shoulders, not back — must be checked
+	// before the generic row rule below, which would otherwise claim them.
+	[/rear[- ]?delt|row to neck/i, 'rear_delt'],
+	// Word-bounded so "Narrow Stance Squats" and similar don't get caught by
+	// the substring "row" inside an unrelated word.
+	[/\brows?\b/i, 'horizontal_pull'],
 	[/romanian|stiff-legged|stiff leg|straight-leg deadlift/i, 'hip_hinge'],
 	[/deadlift/i, 'hip_hinge'],
 	[/good morning/i, 'hip_hinge'],
@@ -88,6 +105,9 @@ const PATTERN_RULES = [
 	[/hyperextension|back extension/i, 'hip_hinge'],
 	[/hip thrust|glute bridge/i, 'hip_thrust'],
 	[/split squat|bulgarian/i, 'lunge'],
+	// Calf press on the leg press machine is a calf isolation exercise, not a
+	// squat — must be checked before the leg-press rule below.
+	[/calf press/i, 'calf_raise'],
 	[/leg press|hack squat/i, 'squat'],
 	[/squat/i, (e) => (e.equipment === 'body only' ? null : 'squat')],
 	[/lunge|step-up|step up/i, 'lunge'],
@@ -98,7 +118,11 @@ const PATTERN_RULES = [
 	[/lateral raise|side lateral/i, 'lateral_raise'],
 	[/rear delt|reverse fl/i, 'rear_delt'],
 	[/preacher|concentration|hammer curl|curl/i, (e) => (has(e, 'biceps') ? 'biceps_curl' : null)],
-	[/pushdown|push-down|skullcrusher|french press|triceps? extension|kickback/i, 'triceps_extension'],
+	// "Kickback" alone is ambiguous — glute kickbacks share the name with
+	// triceps kickbacks but train a completely different muscle. No pattern
+	// bucket fits an isolated glute kickback well, so leave those unpatterned.
+	[/kickback/i, (e) => (has(e, 'triceps') ? 'triceps_extension' : null)],
+	[/pushdown|push-down|skullcrusher|french press|triceps? extension/i, 'triceps_extension'],
 	[/cable crunch|crunch|sit-?up|leg raise|knee raise|russian twist|ab roller|rollout/i, 'ab_flexion'],
 	[/plank/i, 'anti_extension'],
 	[CARRY, 'loaded_carry']
