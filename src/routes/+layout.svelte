@@ -19,7 +19,7 @@
 		{ href: '/', label: 'Train' },
 		{ href: '/routines', label: 'Routine' },
 		{ href: '/exercises', label: 'Exercises' },
-		{ href: '/history', label: 'History' }
+		{ href: '/you', label: 'You' }
 	];
 
 	function isActive(href: string): boolean {

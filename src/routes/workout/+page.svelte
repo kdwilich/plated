@@ -232,7 +232,7 @@
 			await enqueue(toPayload(session));
 			await clearActive();
 			await drainOutbox();
-			await goto('/history');
+			await goto('/you/history');
 		} finally {
 			finishing = false;
 		}

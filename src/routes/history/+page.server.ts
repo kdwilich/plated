@@ -1,20 +1,6 @@
-import { fail } from '@sveltejs/kit';
-import type { Actions, PageServerLoad } from './$types';
-import { getDb } from '$lib/server/db';
-import { deleteWorkout, recentWorkouts } from '$lib/server/workouts';
+import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ platform, locals }) => {
-	const db = getDb(platform);
-	return { workouts: await recentWorkouts(db, locals.user!.id) };
-};
-
-export const actions: Actions = {
-	delete: async ({ request, platform, locals }) => {
-		const db = getDb(platform);
-		const form = await request.formData();
-		const id = form.get('id') as string;
-		if (!id) return fail(400, { error: 'missing id' });
-		await deleteWorkout(db, locals.user!.id, id);
-		return { ok: true };
-	}
-};
+// The app is installed as a PWA and something may still hold this URL.
+// 308 rather than 301: permanent, and it cannot be rewritten to a GET later.
+export const load: PageServerLoad = () => redirect(308, '/you/history');

@@ -46,7 +46,7 @@
 <ul>
 	{#each data.workouts as w (w.id)}
 		<li class="entry">
-			<a class="card row" class:shrunk={editing} href="/history/{w.id}">
+			<a class="card row" class:shrunk={editing} href="/you/history/{w.id}">
 				<span class="row-main">
 					<span class="row-name">{w.session_name ?? 'Freestyle'}</span>
 					<span class="row-date num">{fmtDate(w.started_at)} · {duration(w.started_at, w.finished_at)}</span>
