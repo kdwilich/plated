@@ -117,8 +117,10 @@ test('one user cannot overwrite another\'s workout by reusing its id', async () 
 	// Ids are client-generated, so a hostile client can pick one it has seen.
 	const db = testDb();
 	await seedExercise(db);
-	await ingestWorkout(db, 1, payload('w1'));
-	await ingestWorkout(db, 2, payload('w1'));
+	assert.equal(await ingestWorkout(db, 1, payload('w1')), true);
+	// False, so the route can answer 409 and the sender's outbox keeps the
+	// entry. A silent success would make it delete an unsynced workout.
+	assert.equal(await ingestWorkout(db, 2, payload('w1')), false);
 	const row = await db.prepare('SELECT user_id FROM workout WHERE id = ?').bind('w1').first();
 	assert.equal(row!.user_id, 1);
 });

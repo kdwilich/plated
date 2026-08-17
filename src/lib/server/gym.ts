@@ -56,9 +56,20 @@ export async function getGym(db: D1Database, userId: number): Promise<GymRecord>
 
 /**
  * A new account's starting gym. This used to be seven rows in seed.sql, where
- * per-user data never belonged. Returns the new gym's id.
+ * per-user data never belonged. Returns the gym's id.
+ *
+ * Idempotent, and that matters at exactly one moment: the first account to sign
+ * up inherits everything written before accounts existed, gym included. An
+ * unconditional bootstrap would hand it a second, empty gym and leave getGym
+ * choosing between the two by id — which is to say arbitrarily.
  */
 export async function bootstrapUser(db: D1Database, userId: number): Promise<string> {
+	const existing = await db
+		.prepare('SELECT id FROM gym WHERE user_id = ? ORDER BY id LIMIT 1')
+		.bind(userId)
+		.first<{ id: string }>();
+	if (existing) return existing.id;
+
 	const id = `gym-${crypto.randomUUID()}`;
 	await saveGym(db, userId, {
 		id,

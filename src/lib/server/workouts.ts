@@ -30,7 +30,7 @@ export async function ingestWorkout(
 	db: D1Database,
 	userId: number,
 	payload: SyncPayload
-): Promise<void> {
+): Promise<boolean> {
 	const w = payload.workout;
 	// Ids are client-generated, so a client can send one it has merely seen.
 	// Ownership comes from the session and nothing in the body influences it.
@@ -38,7 +38,10 @@ export async function ingestWorkout(
 		.prepare('SELECT user_id FROM workout WHERE id = ?')
 		.bind(w.id)
 		.first<{ user_id: number }>();
-	if (owner && owner.user_id !== userId) return;
+	// False, not a silent success: on a shared phone this is one person's
+	// outbox draining under another's session, and a cheerful "ok" would make
+	// the client delete a workout that was never stored.
+	if (owner && owner.user_id !== userId) return false;
 
 	const stmts = [
 		db
@@ -71,6 +74,7 @@ export async function ingestWorkout(
 		);
 	}
 	await db.batch(stmts);
+	return true;
 }
 
 /**

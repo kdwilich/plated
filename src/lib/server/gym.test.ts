@@ -48,6 +48,20 @@ test('bar ids do not collide between users', async () => {
 	assert.equal(a.some((id) => b.includes(id)), false);
 });
 
+test('bootstrapping twice does not give you a second gym', async () => {
+	// The first account to sign up inherits the pre-accounts data, gym included.
+	// An unconditional bootstrap hands it a second, empty gym — and getGym then
+	// picks between them by id, which is to say arbitrarily.
+	const db = testDb();
+	await db
+		.prepare("INSERT INTO gym (id, name, user_id) VALUES ('gym-default', 'Existing', 1)")
+		.run();
+	await bootstrapUser(db, 1);
+	const { results } = await db.prepare('SELECT id FROM gym WHERE user_id = 1').all();
+	assert.equal(results.length, 1);
+	assert.equal((await getGym(db, 1)).name, 'Existing');
+});
+
 test('a gym carries its owner', async () => {
 	const db = testDb();
 	await bootstrapUser(db, 7);
