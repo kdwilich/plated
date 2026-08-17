@@ -39,22 +39,25 @@
 </div>
 
 <style lang="scss">
+	// Sized by the grid rather than in fixed pixels. 26 columns of 10px overflow
+	// a 375px phone by exactly one pixel, and a 320px one by rather more; letting
+	// the columns divide whatever width there is means it fits every screen and
+	// never puts a scrollbar under the card.
 	.heatmap {
-		display: flex;
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(0, 1fr);
 		gap: 2px;
-		overflow-x: auto;
-		padding-bottom: $space-1;
 	}
 
 	.col {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-rows: repeat(7, 1fr);
 		gap: 2px;
 	}
 
 	.cell {
-		width: 10px;
-		height: 10px;
+		aspect-ratio: 1;
 		border-radius: 1px;
 		background: $hairline;
 

@@ -6,6 +6,11 @@
 	import type { PersonalRecord } from '$lib/training/records';
 	import type { LoggedSet } from '$lib/training/types';
 
+	// `records` defaults rather than being required so that a shallow-routed
+	// page.state pushed before a deploy — which a back button can still restore
+	// — renders without records instead of throwing. The cost is that a caller
+	// forgetting to pass it fails silently, which is exactly how it was missed
+	// on the /exercises/[id] route once already.
 	let {
 		exercise,
 		history = [],

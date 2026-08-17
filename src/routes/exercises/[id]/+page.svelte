@@ -6,4 +6,4 @@
 
 <svelte:head><title>Plateload — {data.exercise.name}</title></svelte:head>
 
-<ExerciseGuide exercise={data.exercise} history={data.history} />
+<ExerciseGuide exercise={data.exercise} history={data.history} records={data.records} />
