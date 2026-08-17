@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { outboxCount } from '$lib/client/session';
 
 	let { data, form } = $props();
 
@@ -11,24 +10,6 @@
 		data.gym.bars.map((b) => `${b.name}:${b.weight_lb}${b.is_default ? '*' : ''}`).join(', ')
 	);
 
-	// Signing out ends the session the outbox needs, so anything still pending
-	// would sit undelivered until the next sign-in. Worth one question.
-	// Cancelled unconditionally first: the check is async, and by the time an
-	// awaited answer came back the form would already have gone.
-	function confirmSignOut(e: SubmitEvent) {
-		e.preventDefault();
-		const el = e.currentTarget as HTMLFormElement;
-		void (async () => {
-			const pending = await outboxCount();
-			const workouts = pending === 1 ? 'workout' : 'workouts';
-			if (
-				pending === 0 ||
-				confirm(`${pending} finished ${workouts} still need to sync. Sign out anyway?`)
-			) {
-				el.submit(); // bypasses this handler, so it cannot loop
-			}
-		})();
-	}
 </script>
 
 <svelte:head><title>Plateload — gym</title></svelte:head>
@@ -80,17 +61,6 @@
 	<button class="btn primary save" type="submit">Save gym</button>
 </form>
 
-<!-- The account lives here rather than in a fifth tab: this is already the
-     settings-shaped page, and signing out is a once-in-a-while act. -->
-<section class="account">
-	<p class="label">Account</p>
-	<div class="account-row">
-		<span class="email">{data.user?.email}</span>
-		<form method="POST" action="/logout" onsubmit={confirmSignOut}>
-			<button class="btn quiet" type="submit">Sign out</button>
-		</form>
-	</div>
-</section>
 
 <style lang="scss">
 	.page-title {
@@ -158,25 +128,4 @@
 		width: 100%;
 	}
 
-	.account {
-		margin-top: $space-6;
-		padding-top: $space-4;
-		border-top: 1px solid $hairline;
-	}
-
-	.account-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: $space-3;
-		margin-top: $space-2;
-	}
-
-	.email {
-		font-size: 14px;
-		color: $text-dim;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
 </style>
