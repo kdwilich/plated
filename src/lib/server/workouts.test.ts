@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { testDb } from './testdb.ts';
 import {
 	deleteWorkout,
+	exerciseSets,
 	ingestWorkout,
 	lastCompletedPosition,
 	lastPerformances,
@@ -141,4 +142,37 @@ test('lastCompletedPosition does not read another user\'s rotation', async () =>
 	await ingestWorkout(db, 1, payload('w1', 'ex1', 'rs1'));
 	assert.equal(await lastCompletedPosition(db, 1, 'r1'), 2);
 	assert.equal(await lastCompletedPosition(db, 2, 'r1'), null);
+});
+
+test('exerciseSets returns every working set for one exercise, newest first', async () => {
+	const db = testDb();
+	await seedExercise(db);
+	const older = payload('w1');
+	older.workout.started_at = '2026-03-01T18:00:00.000Z';
+	older.sets[0].completed_at = '2026-03-01T18:00:00.000Z';
+	older.sets.push({ ...older.sets[0], id: 'w1-s2', weight_lb: 135, is_warmup: true });
+	await ingestWorkout(db, 1, older);
+	await ingestWorkout(db, 1, payload('w2'));
+
+	const sets = await exerciseSets(db, 1, 'ex1');
+	assert.equal(sets.length, 2, 'the warmup is excluded');
+	assert.equal(sets[0].completed_at, NOW, 'newest first');
+});
+
+test('exerciseSets ignores a workout that never finished', async () => {
+	// A session abandoned mid-set must not hand out a personal record.
+	const db = testDb();
+	await seedExercise(db);
+	const abandoned = payload('w1');
+	abandoned.workout.finished_at = null;
+	abandoned.sets[0].weight_lb = 405;
+	await ingestWorkout(db, 1, abandoned);
+	assert.deepEqual(await exerciseSets(db, 1, 'ex1'), []);
+});
+
+test('exerciseSets does not read another user\'s lifts', async () => {
+	const db = testDb();
+	await seedExercise(db);
+	await ingestWorkout(db, 1, payload('w1'));
+	assert.deepEqual(await exerciseSets(db, 2, 'ex1'), []);
 });

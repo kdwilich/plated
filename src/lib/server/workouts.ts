@@ -1,3 +1,4 @@
+import type { RecordSet } from '../training/records.ts';
 import type { LoggedSet } from '../training/types.ts';
 
 export interface SyncPayload {
@@ -123,6 +124,34 @@ export async function lastPerformances(
 	// Sets arrived newest-first; within a session they should read in logged order.
 	for (const sessions of Object.values(out)) for (const s of sessions) s.reverse();
 	return out;
+}
+
+/**
+ * Every working set ever logged for one exercise, newest first — what the
+ * records card in the guide needs, because a lifetime best genuinely depends on
+ * all of them. Served by idx_set_exercise_time, and bounded by how much has
+ * actually been lifted rather than by how large the catalog is.
+ *
+ * Deliberately not aggregate SQL: handing the rows to a pure bestRecords() is
+ * what makes every record rule testable without a database.
+ */
+export async function exerciseSets(
+	db: D1Database,
+	userId: number,
+	exerciseId: string
+): Promise<RecordSet[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT ws.weight_lb, ws.reps, ws.duration_s, ws.distance_m, ws.completed_at
+			 FROM workout_set ws
+			 JOIN workout w ON w.id = ws.workout_id
+			 WHERE ws.exercise_id = ? AND w.user_id = ?
+			   AND w.finished_at IS NOT NULL AND ws.is_warmup = 0
+			 ORDER BY ws.completed_at DESC`
+		)
+		.bind(exerciseId, userId)
+		.all<RecordSet>();
+	return results;
 }
 
 /** Sets go too — the schema cascades, but D1 needs foreign keys enabled. */
