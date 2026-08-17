@@ -5,9 +5,31 @@ export interface GymRecord extends GymConfig {
 	name: string;
 }
 
-export async function getGym(db: D1Database, id = 'gym-default'): Promise<GymRecord> {
+export interface GymInput {
+	id: string;
+	name: string;
+	dumbbell_step_lb: number;
+	machine_step_lb: number;
+	equipment: string[];
+	plates: PlateStock[];
+	bars: { id: string; name: string; weight_lb: number; is_default: boolean }[];
+}
+
+/**
+ * The signed-in user's gym, created on first sight. It used to be a single row
+ * with a hardcoded id that seed.sql guaranteed; nothing guarantees it now, and
+ * returning a hollow default would leave someone logging lifts against a gym
+ * with no plates in it.
+ */
+export async function getGym(db: D1Database, userId: number): Promise<GymRecord> {
+	const existing = await db
+		.prepare('SELECT id FROM gym WHERE user_id = ? ORDER BY id LIMIT 1')
+		.bind(userId)
+		.first<{ id: string }>();
+	const id = existing?.id ?? (await bootstrapUser(db, userId));
+
 	const [gym, equipment, plates, bars] = await db.batch([
-		db.prepare('SELECT * FROM gym WHERE id = ?').bind(id),
+		db.prepare('SELECT * FROM gym WHERE id = ? AND user_id = ?').bind(id, userId),
 		db.prepare('SELECT equipment_key FROM gym_equipment WHERE gym_id = ?').bind(id),
 		db.prepare('SELECT denomination_lb, pairs FROM gym_plate WHERE gym_id = ? ORDER BY denomination_lb DESC').bind(id),
 		db.prepare('SELECT id, name, weight_lb, is_default FROM gym_bar WHERE gym_id = ? ORDER BY is_default DESC, weight_lb DESC').bind(id)
@@ -32,22 +54,54 @@ export async function getGym(db: D1Database, id = 'gym-default'): Promise<GymRec
 	};
 }
 
-export async function saveGym(
-	db: D1Database,
-	gym: {
-		id: string;
-		name: string;
-		dumbbell_step_lb: number;
-		machine_step_lb: number;
-		equipment: string[];
-		plates: PlateStock[];
-		bars: { id: string; name: string; weight_lb: number; is_default: boolean }[];
-	}
-): Promise<void> {
+/**
+ * A new account's starting gym. This used to be seven rows in seed.sql, where
+ * per-user data never belonged. Returns the new gym's id.
+ */
+export async function bootstrapUser(db: D1Database, userId: number): Promise<string> {
+	const id = `gym-${crypto.randomUUID()}`;
+	await saveGym(db, userId, {
+		id,
+		name: 'My gym',
+		dumbbell_step_lb: 5,
+		machine_step_lb: 10,
+		equipment: [
+			'barbell',
+			'dumbbell',
+			'machine',
+			'cable',
+			'body only',
+			'e-z curl bar',
+			'kettlebells'
+		],
+		plates: [45, 35, 25, 10, 5, 2.5].map((d) => ({
+			denomination_lb: d,
+			pairs: d >= 25 ? 10 : 4
+		})),
+		// Suffixed with the gym id because these used to derive from the bar's
+		// name alone — bar-straight-bar for everyone — and gym_bar's primary key
+		// is shared across accounts.
+		bars: [
+			{ id: `bar-straight-${id}`, name: 'Straight bar', weight_lb: 45, is_default: true },
+			{ id: `bar-ez-${id}`, name: 'EZ curl', weight_lb: 25, is_default: false }
+		]
+	});
+	return id;
+}
+
+export async function saveGym(db: D1Database, userId: number, gym: GymInput): Promise<void> {
+	// The id arrives from a form. INSERT OR REPLACE on a caller-supplied id is
+	// exactly how one account would overwrite another's gym.
+	const owner = await db
+		.prepare('SELECT user_id FROM gym WHERE id = ?')
+		.bind(gym.id)
+		.first<{ user_id: number }>();
+	if (owner && owner.user_id !== userId) throw new Error('That gym belongs to someone else.');
+
 	const stmts = [
 		db
-			.prepare('INSERT OR REPLACE INTO gym (id, name, dumbbell_step_lb, machine_step_lb) VALUES (?, ?, ?, ?)')
-			.bind(gym.id, gym.name, gym.dumbbell_step_lb, gym.machine_step_lb),
+			.prepare('INSERT OR REPLACE INTO gym (id, name, dumbbell_step_lb, machine_step_lb, user_id) VALUES (?, ?, ?, ?, ?)')
+			.bind(gym.id, gym.name, gym.dumbbell_step_lb, gym.machine_step_lb, userId),
 		db.prepare('DELETE FROM gym_equipment WHERE gym_id = ?').bind(gym.id),
 		db.prepare('DELETE FROM gym_plate WHERE gym_id = ?').bind(gym.id),
 		db.prepare('DELETE FROM gym_bar WHERE gym_id = ?').bind(gym.id)

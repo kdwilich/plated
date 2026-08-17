@@ -62,11 +62,13 @@ export function testDb(): D1Database {
 
 	return {
 		prepare: (sql: string) => new Stmt(db, sql),
-		// D1's batch is the transaction. Sequential is honest enough here: what
-		// these tests assert is ownership, not atomicity under failure.
+		// D1's batch is the transaction, and it returns one result per statement
+		// — callers destructure those. Running sequentially is honest enough
+		// here: what these tests assert is ownership, not atomicity on failure.
 		batch: async (stmts: Stmt[]) => {
-			for (const s of stmts) await s.run();
-			return [];
+			const out = [];
+			for (const s of stmts) out.push(await s.all());
+			return out;
 		}
 	} as unknown as D1Database;
 }
