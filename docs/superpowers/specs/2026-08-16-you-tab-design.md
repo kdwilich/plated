@@ -28,9 +28,11 @@ exercise, so they render in the exercise guide behind the ⓘ.
   project.
 - **Per-exercise trend charts.** The highest-value thing not in this spec, and
   the largest. Deferred deliberately.
-- **Time as a metric.** No "hours under the bar", no longest-hold record. Sets,
-  reps, and load are what this tracks. The duration already shown on a history
-  row stays because it is existing behaviour, not a new statistic.
+- **Time as an aggregate.** No "hours under the bar" on the stats page. Summing
+  session length across a lifetime measures attendance, not training. A
+  *record* held in time is a different thing and is in scope — see below. The
+  duration already shown on a history row stays because it is existing
+  behaviour, not a new statistic.
 - **Flagging a PR as the set is logged.** Same data, and the moment it means
   most — but it changes the logging surface, and records in your face mid-set is
   the opposite of what this tab is for.
@@ -91,19 +93,27 @@ existing function scores the *plan*; this scores what actually happened, and
 showing them in one row is the point — it is the only view in the app that can
 say a group is being under-trained rather than merely under-planned.
 
-**The drill-down.** Each group row expands to the exercises trained for it,
-ranked by best estimated one-rep max, each with the set that produced it and the
-ⓘ that opens the full record breakdown:
+**The drill-down.** Each group row expands to the exercises trained for it, one
+headline record each, with the set that produced it and the ⓘ that opens the
+full breakdown:
 
 ```
 BACK            14 sets / wk    planned 16
   Barbell Row        185 × 8 · 234 est.    Mar 4   ⓘ
   Lat Pulldown       150 × 10 · 200 est.   Mar 2   ⓘ
+  Dead Hang          1:20                  Feb 27  ⓘ
 ```
 
-One query with a `MAX` and its bare columns feeds this. There is no second
-records interface: the stats page shows one number per lift and the guide holds
-the detail.
+The headline is the first record its measurement offers: estimated 1RM for
+loaded lifts, most reps, longest hold, furthest. Loaded lifts sort first by that
+estimate, and the rest follow ranked by recency — a hold and a squat share no
+scale, and pretending they can be ordered against each other would invent a
+comparison the data cannot support.
+
+One query feeds this, the metric chosen by a `CASE` on measurement so that a
+single `MAX` still carries its own row's bare columns. There is no second records
+interface: the stats page shows one number per lift and the guide holds the
+detail.
 
 Exercises with no movement pattern — cardio and oddities — group under **Other**
 rather than disappearing, which is what `weeklySetsByGroup` does to them.
@@ -128,10 +138,15 @@ list:
 | Measurement | Records shown |
 |---|---|
 | `load_reps` | Heaviest · best estimated 1RM · best single set |
-| `load_time` | Heaviest |
+| `load_time` | Heaviest · longest hold |
 | `reps_only` | Most reps |
-| `distance_time` | Furthest |
-| `time` | None — duration is all it measures, and duration is out of scope |
+| `time` | Longest hold |
+| `distance_time` | Furthest · longest |
+
+A record measured in time is a record. A plank held for three minutes and a
+weighted carry held for ninety seconds are both progress, and there is nothing
+else to measure them by. This is the only place duration is tracked, and it is
+tracked per exercise rather than summed.
 
 Estimated 1RM is Epley, `weight × (1 + reps / 30)`. It ranks 225×5 above 245×1,
 which is the truer read of what someone can do. Each line carries the set and the
