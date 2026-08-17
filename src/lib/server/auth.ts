@@ -2,11 +2,23 @@
 // reason this project needs none of the usual authentication dependencies.
 
 /**
- * OWASP's figure for PBKDF2-HMAC-SHA256. Measured at roughly 43 ms of CPU,
- * which fits a Workers *paid* plan comfortably and does not fit the free
- * plan's 10 ms budget. Lower it only as a deliberate, recorded decision.
+ * The most Cloudflare Workers allows. Above this the platform refuses outright:
+ *
+ *   NotSupportedError: Pbkdf2 failed: iteration counts above 100000
+ *   are not supported (requested 600000).
+ *
+ * OWASP asks 600,000 for PBKDF2-HMAC-SHA256, so this is below current guidance
+ * and the ceiling is not ours to raise. `wrangler dev` does *not* enforce the
+ * cap, so this only ever fails in production — which is exactly how it was
+ * found. Do not raise this number expecting it to work.
+ *
+ * To exceed it the derivation has to be chained: N passes of 100,000, each
+ * feeding the next. That costs N times the CPU, which is the real budget
+ * question, so it is a deliberate decision rather than a constant to bump.
+ * The stored hash carries its own iteration count, so any change applies to
+ * new passwords without invalidating existing ones.
  */
-const ITERATIONS = 600_000;
+const ITERATIONS = 100_000;
 
 const b64 = (b: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(b)));
 const unb64 = (s: string): Uint8Array => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
