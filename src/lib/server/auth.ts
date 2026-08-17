@@ -159,3 +159,49 @@ export async function destroySession(db: D1Database, token: string | undefined):
 	if (!token) return;
 	await db.prepare('DELETE FROM session WHERE token_hash = ?').bind(await sha256(token)).run();
 }
+
+export interface UserProfile {
+	id: number;
+	email: string;
+	created_at: string;
+}
+
+export async function getUserProfile(db: D1Database, userId: number): Promise<UserProfile | null> {
+	return db
+		.prepare('SELECT id, email, created_at FROM user WHERE id = ?')
+		.bind(userId)
+		.first<UserProfile>();
+}
+
+/**
+ * False when the current password is wrong. On success every *other* session is
+ * revoked — changing a password because you fear it leaked should end the
+ * sessions that leak might have created. `keepToken` is the caller's own
+ * session, spared so that securing the account does not sign you out of the
+ * device you are holding.
+ *
+ * There is no reset flow and no way to send email, so this is the only recovery
+ * lever the app has.
+ */
+export async function changePassword(
+	db: D1Database,
+	userId: number,
+	current: string,
+	next: string,
+	keepToken: string | undefined
+): Promise<boolean> {
+	const row = await db
+		.prepare('SELECT password_hash FROM user WHERE id = ?')
+		.bind(userId)
+		.first<{ password_hash: string }>();
+	if (!row || !(await verifyPassword(current, row.password_hash))) return false;
+
+	const hash = await hashPassword(next);
+	// An empty string never matches a real hash, so a missing token revokes all.
+	const keep = keepToken ? await sha256(keepToken) : '';
+	await db.batch([
+		db.prepare('UPDATE user SET password_hash = ? WHERE id = ?').bind(hash, userId),
+		db.prepare('DELETE FROM session WHERE user_id = ? AND token_hash != ?').bind(userId, keep)
+	]);
+	return true;
+}

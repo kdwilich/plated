@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	authenticate,
+	changePassword,
 	createSession,
 	createUser,
 	destroySession,
+	getUserProfile,
 	hashPassword,
 	resolveSession,
 	verifyPassword
@@ -141,4 +143,51 @@ test('sign-in is case-insensitive on email', async () => {
 	const db = testDb();
 	await createUser(db, 'a@example.com', PASSWORD);
 	assert.ok(await authenticate(db, 'A@Example.COM', PASSWORD));
+});
+
+test('changing a password requires the current one', async () => {
+	const db = testDb();
+	const user = await createUser(db, 'a@example.com', PASSWORD);
+	assert.equal(
+		await changePassword(db, user!.id, 'not-the-password', 'a-brand-new-password', undefined),
+		false
+	);
+	assert.ok(await authenticate(db, 'a@example.com', PASSWORD), 'the old password still works');
+});
+
+test('a changed password replaces the old one', async () => {
+	const db = testDb();
+	const user = await createUser(db, 'a@example.com', PASSWORD);
+	assert.ok(await changePassword(db, user!.id, PASSWORD, 'a-brand-new-password', undefined));
+	assert.equal(await authenticate(db, 'a@example.com', PASSWORD), null);
+	assert.ok(await authenticate(db, 'a@example.com', 'a-brand-new-password'));
+});
+
+test('changing a password revokes every other session', async () => {
+	// Changing a password because you fear it leaked should end the sessions
+	// that leak might have created.
+	const db = testDb();
+	const user = await createUser(db, 'a@example.com', PASSWORD);
+	const phone = await createSession(db, user!.id);
+	const laptop = await createSession(db, user!.id);
+	await changePassword(db, user!.id, PASSWORD, 'a-brand-new-password', laptop);
+	assert.equal(await resolveSession(db, phone), null);
+});
+
+test('the session doing the changing survives it', async () => {
+	// Otherwise the act of securing the account signs you out of the device
+	// you are holding.
+	const db = testDb();
+	const user = await createUser(db, 'a@example.com', PASSWORD);
+	const laptop = await createSession(db, user!.id);
+	await changePassword(db, user!.id, PASSWORD, 'a-brand-new-password', laptop);
+	assert.ok(await resolveSession(db, laptop));
+});
+
+test('a profile carries the date the account was made', async () => {
+	const db = testDb();
+	const user = await createUser(db, 'a@example.com', PASSWORD);
+	const profile = await getUserProfile(db, user!.id);
+	assert.equal(profile!.email, 'a@example.com');
+	assert.ok(!Number.isNaN(Date.parse(profile!.created_at)));
 });
