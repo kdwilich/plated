@@ -61,3 +61,89 @@ export async function verifyPassword(password: string, stored: string): Promise<
 	for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
 	return diff === 0;
 }
+
+export interface SessionUser {
+	id: number;
+	email: string;
+}
+
+/** Ninety days. This is a phone app used in a gym, and a session that expires
+ *  between sets is the worst failure the app has. */
+export const SESSION_DAYS = 90;
+export const SESSION_COOKIE = 'session';
+
+const sha256 = async (s: string): Promise<string> =>
+	b64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+
+/**
+ * Null when the email is already taken. The UNIQUE constraint is the check:
+ * asking first would let two simultaneous signups both see the address free.
+ */
+export async function createUser(
+	db: D1Database,
+	email: string,
+	password: string
+): Promise<SessionUser | null> {
+	const hash = await hashPassword(password);
+	try {
+		const row = await db
+			.prepare(
+				'INSERT INTO user (email, password_hash, created_at) VALUES (?, ?, ?) RETURNING id, email'
+			)
+			.bind(email.trim(), hash, new Date().toISOString())
+			.first<{ id: number; email: string }>();
+		return row ? { id: row.id, email: row.email } : null;
+	} catch {
+		return null;
+	}
+}
+
+export async function authenticate(
+	db: D1Database,
+	email: string,
+	password: string
+): Promise<SessionUser | null> {
+	const row = await db
+		.prepare('SELECT id, email, password_hash FROM user WHERE email = ?')
+		.bind(email.trim())
+		.first<{ id: number; email: string; password_hash: string }>();
+	// Hash even when there is no such user, so a wrong address and a wrong
+	// password cost the same and timing cannot enumerate accounts.
+	const stored = row?.password_hash ?? (await hashPassword(password));
+	const ok = await verifyPassword(password, stored);
+	if (!row || !ok) return null;
+	return { id: row.id, email: row.email };
+}
+
+export async function createSession(db: D1Database, userId: number): Promise<string> {
+	const token = b64(crypto.getRandomValues(new Uint8Array(32)).buffer as ArrayBuffer);
+	const now = new Date();
+	const expires = new Date(now.getTime() + SESSION_DAYS * 86_400_000);
+	await db
+		.prepare(
+			'INSERT INTO session (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'
+		)
+		.bind(await sha256(token), userId, now.toISOString(), expires.toISOString())
+		.run();
+	return token;
+}
+
+export async function resolveSession(
+	db: D1Database,
+	token: string | undefined
+): Promise<SessionUser | null> {
+	if (!token) return null;
+	const row = await db
+		.prepare(
+			`SELECT u.id, u.email FROM session s JOIN user u ON u.id = s.user_id
+			 WHERE s.token_hash = ? AND s.expires_at > ?`
+		)
+		.bind(await sha256(token), new Date().toISOString())
+		.first<{ id: number; email: string }>();
+	return row ? { id: row.id, email: row.email } : null;
+}
+
+export async function destroySession(db: D1Database, token: string | undefined): Promise<void> {
+	if (!token) return;
+	await db.prepare('DELETE FROM session WHERE token_hash = ?').bind(await sha256(token)).run();
+}
