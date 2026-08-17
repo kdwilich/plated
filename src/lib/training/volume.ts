@@ -72,6 +72,37 @@ export function weeklySetsByGroup(draft: RoutineDraft): Record<string, number> {
 	return out;
 }
 
+/** One exercise's contribution to a window of real training. */
+export interface TrainedExercise {
+	primary_muscles: string[];
+	secondary_muscles: string[];
+	movement_pattern: string | null;
+	sets: number;
+}
+
+/**
+ * Sets per muscle group from what was actually logged — the counterpart to
+ * weeklySetsByGroup, which scores the plan. The scoring rules are deliberately
+ * identical so the two can be shown side by side, which is the only way the app
+ * can say a group is under-*trained* rather than merely under-planned.
+ */
+export function actualSetsByGroup(trained: TrainedExercise[]): Record<string, number> {
+	const out: Record<string, number> = {};
+	for (const t of trained) {
+		if (!t.movement_pattern) continue;
+		for (const m of t.primary_muscles) {
+			const g = muscleGroup(m);
+			if (g) out[g] = (out[g] ?? 0) + t.sets;
+		}
+		for (const m of t.secondary_muscles) {
+			const g = muscleGroup(m);
+			if (g) out[g] = (out[g] ?? 0) + t.sets * 0.5;
+		}
+	}
+	for (const g of Object.keys(out)) out[g] = Math.round(out[g] * 2) / 2;
+	return out;
+}
+
 export function groupsForSession(session: SessionDraft): string[] {
 	const set = new Set<string>();
 	for (const { exercise } of session.exercises) {
