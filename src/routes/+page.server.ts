@@ -4,19 +4,20 @@ import { getActiveRoutine } from '$lib/server/routines';
 import { lastCompletedPosition, recentTrainedMuscles } from '$lib/server/workouts';
 import { muscleGroup, nextPosition, stalenessByGroup } from '$lib/training/volume';
 
-export const load: PageServerLoad = async ({ platform }) => {
+export const load: PageServerLoad = async ({ platform, locals }) => {
 	const db = getDb(platform);
-	const routine = await getActiveRoutine(db);
+	const uid = locals.user!.id;
+	const routine = await getActiveRoutine(db, uid);
 
 	let next: number | null = null;
 	let staleness: Record<string, number> = {};
 	let sessionGroups: Record<string, string[]> = {};
 
 	if (routine) {
-		const last = await lastCompletedPosition(db, routine.id);
+		const last = await lastCompletedPosition(db, uid, routine.id);
 		next = nextPosition(routine.sessions.length, last);
 
-		const trained = await recentTrainedMuscles(db);
+		const trained = await recentTrainedMuscles(db, uid);
 		const pairs: { group: string; completed_at: string }[] = [];
 		for (const t of trained) {
 			for (const m of JSON.parse(t.primary_muscles) as string[]) {

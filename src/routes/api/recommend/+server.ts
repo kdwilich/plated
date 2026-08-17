@@ -14,14 +14,14 @@ import { getGym } from '$lib/server/gym';
 import { allExercises, getExercise } from '$lib/server/catalog';
 import { rankAlternatives, rankComplements } from '$lib/training/alternatives';
 
-export const GET: RequestHandler = async ({ url, platform }) => {
+export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const db = getDb(platform);
 	const forId = url.searchParams.get('for');
 	const inIds = (url.searchParams.get('in') ?? '').split(',').filter(Boolean);
 
 	if (!forId && inIds.length === 0) return json([]);
 
-	const [gym, catalog] = await Promise.all([getGym(db), allExercises(db)]);
+	const [gym, catalog] = await Promise.all([getGym(db, locals.user!.id), allExercises(db)]);
 
 	if (forId) {
 		const target = await getExercise(db, forId);

@@ -16,14 +16,17 @@ const EQUIPMENT_KEYS = [
 	'exercise ball'
 ];
 
-export const load: PageServerLoad = async ({ platform }) => {
+export const load: PageServerLoad = async ({ platform, locals }) => {
 	const db = getDb(platform);
-	return { gym: await getGym(db), equipmentKeys: EQUIPMENT_KEYS };
+	return { gym: await getGym(db, locals.user!.id), equipmentKeys: EQUIPMENT_KEYS };
 };
 
 export const actions: Actions = {
-	save: async ({ request, platform }) => {
+	save: async ({ request, platform, locals }) => {
 		const db = getDb(platform);
+		// The gym's id comes from the database, never from the form. Nothing
+		// posted can redirect this write at another account's gym.
+		const gymId = (await getGym(db, locals.user!.id)).id;
 		const form = await request.formData();
 
 		const equipment = EQUIPMENT_KEYS.filter((k) => form.get(`eq:${k}`) === 'on');
@@ -44,7 +47,10 @@ export const actions: Actions = {
 			if (!m) continue;
 			const name = m[1].trim();
 			bars.push({
-				id: `bar-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+				// Suffixed with the gym: gym_bar's primary key is shared across
+				// accounts, and two people both owning a "Straight bar" would
+				// otherwise collide on bar-straight-bar.
+				id: `bar-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${gymId}`,
 				name,
 				weight_lb: Number(m[2]),
 				is_default: !!m[3]
@@ -52,8 +58,8 @@ export const actions: Actions = {
 		}
 		if (bars.length > 0 && !bars.some((b) => b.is_default)) bars[0].is_default = true;
 
-		await saveGym(db, {
-			id: 'gym-default',
+		await saveGym(db, locals.user!.id, {
+			id: gymId,
 			name: ((form.get('name') as string) ?? 'My gym').trim() || 'My gym',
 			dumbbell_step_lb: Number(form.get('dumbbell_step')) || 5,
 			machine_step_lb: Number(form.get('machine_step')) || 10,

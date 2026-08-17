@@ -5,33 +5,35 @@ import { getGym } from '$lib/server/gym';
 import { activateRoutine, createRoutine, listRoutines } from '$lib/server/routines';
 import { PROFILES } from '$lib/training/profiles';
 
-export const load: PageServerLoad = async ({ platform }) => {
+export const load: PageServerLoad = async ({ platform, locals }) => {
 	const db = getDb(platform);
-	return { routines: await listRoutines(db), profiles: Object.values(PROFILES) };
+	return { routines: await listRoutines(db, locals.user!.id), profiles: Object.values(PROFILES) };
 };
 
 export const actions: Actions = {
-	create: async ({ platform }) => {
+	create: async ({ platform, locals }) => {
 		const db = getDb(platform);
-		const gym = await getGym(db);
+		const uid = locals.user!.id;
+		const gym = await getGym(db, uid);
 		// Inherit the approach you are already training under, so a hand-built
 		// routine prescribes the same way the generated one did.
-		const active = (await listRoutines(db)).find((r) => r.is_active);
-		const id = await createRoutine(db, 'New routine', active?.profile_key ?? 'hypertrophy', gym.id);
+		const active = (await listRoutines(db, uid)).find((r) => r.is_active);
+		const id = await createRoutine(db, uid, 'New routine', active?.profile_key ?? 'hypertrophy', gym.id);
 		redirect(303, `/routines/${id}`);
 	},
 
-	activate: async ({ request, platform }) => {
+	activate: async ({ request, platform, locals }) => {
 		const db = getDb(platform);
+		const uid = locals.user!.id;
 		const form = await request.formData();
 		const id = form.get('id') as string;
 		if (!id) return fail(400, { error: 'missing id' });
-		const routine = (await listRoutines(db)).find((r) => r.id === id);
+		const routine = (await listRoutines(db, uid)).find((r) => r.id === id);
 		if (!routine) return fail(404, { error: 'No such routine.' });
 		if (routine.exercise_count === 0) {
 			return fail(400, { error: `"${routine.name}" has no exercises yet.` });
 		}
-		await activateRoutine(db, id);
+		await activateRoutine(db, uid, id);
 		return { ok: true };
 	}
 };

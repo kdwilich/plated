@@ -8,15 +8,15 @@ import { getExercise } from '$lib/server/catalog';
 import { lastPerformances } from '$lib/server/workouts';
 import { incrementFor } from '$lib/training/progression';
 
-export const GET: RequestHandler = async ({ url, platform }) => {
+export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const db = getDb(platform);
 	const id = url.searchParams.get('id');
 	if (!id) return json({ error: 'missing id' }, { status: 400 });
 	const ex = await getExercise(db, id);
 	if (!ex) return json({ error: 'not found' }, { status: 404 });
-	const gym = await getGym(db);
+	const gym = await getGym(db, locals.user!.id);
 	const defaultBar = gym.bars.find((b) => b.is_default) ?? gym.bars[0];
-	const history = await lastPerformances(db, [id]);
+	const history = await lastPerformances(db, locals.user!.id, [id]);
 	return json({
 		exercise_id: ex.id,
 		name: ex.name,

@@ -3,9 +3,9 @@ import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
 import { workoutDetail } from '$lib/server/workouts';
 
-export const load: PageServerLoad = async ({ params, platform }) => {
+export const load: PageServerLoad = async ({ params, platform, locals }) => {
 	const db = getDb(platform);
-	const detail = await workoutDetail(db, params.id);
+	const detail = await workoutDetail(db, locals.user!.id, params.id);
 	if (!detail.workout) throw error(404, 'No such workout');
 	return detail;
 };

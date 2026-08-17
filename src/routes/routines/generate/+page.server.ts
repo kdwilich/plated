@@ -9,14 +9,14 @@ import { weeklySetsByGroup } from '$lib/training/volume';
 import { PROFILES } from '$lib/training/profiles';
 import type { RoutineDraft } from '$lib/training/types';
 
-export const load: PageServerLoad = async ({ platform }) => {
+export const load: PageServerLoad = async ({ platform, locals }) => {
 	const db = getDb(platform);
-	const gym = await getGym(db);
+	const gym = await getGym(db, locals.user!.id);
 	return { gym, profiles: Object.values(PROFILES) };
 };
 
 export const actions: Actions = {
-	generate: async ({ request, platform }) => {
+	generate: async ({ request, platform, locals }) => {
 		const db = getDb(platform);
 		const form = await request.formData();
 		const days = Number(form.get('days'));
@@ -30,7 +30,7 @@ export const actions: Actions = {
 		const emphasis: Emphasis =
 			rawEmphasis === 'lower' || rawEmphasis === 'upper' ? rawEmphasis : 'balanced';
 
-		const gym = await getGym(db);
+		const gym = await getGym(db, locals.user!.id);
 		const catalog = await generatorCatalog(db);
 		const draft = generate({
 			daysPerWeek: days as 2 | 3 | 4 | 5 | 6,
@@ -49,7 +49,7 @@ export const actions: Actions = {
 			emphasis
 		};
 	},
-	save: async ({ request, platform }) => {
+	save: async ({ request, platform, locals }) => {
 		const db = getDb(platform);
 		const form = await request.formData();
 		const raw = form.get('draft') as string;
@@ -61,8 +61,9 @@ export const actions: Actions = {
 		} catch {
 			return fail(400, { error: 'Malformed draft.' });
 		}
-		const gym = await getGym(db);
-		const id = await saveRoutineFromDraft(db, draft, name, gym.id);
+		const uid = locals.user!.id;
+		const gym = await getGym(db, uid);
+		const id = await saveRoutineFromDraft(db, uid, draft, name, gym.id);
 		// Straight into the editor, holding the thing you just made.
 		redirect(303, `/routines/${id}`);
 	}

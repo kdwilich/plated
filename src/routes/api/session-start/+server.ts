@@ -6,13 +6,15 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { getGym } from '$lib/server/gym';
+import { sessionScaffold } from '$lib/server/routines';
 import { lastPerformances } from '$lib/server/workouts';
 import { incrementFor } from '$lib/training/progression';
 
-export const POST: RequestHandler = async ({ request, platform }) => {
+export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const db = getDb(platform);
+	const userId = locals.user!.id;
 	const { routine_session_id } = (await request.json()) as { routine_session_id?: string };
-	const gym = await getGym(db);
+	const gym = await getGym(db, userId);
 	const defaultBar = gym.bars.find((b) => b.is_default) ?? gym.bars[0];
 
 	let sessionName = 'Freestyle';
@@ -32,44 +34,33 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	}[] = [];
 
 	if (routine_session_id) {
-		const session = await db
-			.prepare('SELECT name FROM routine_session WHERE id = ?')
-			.bind(routine_session_id)
-			.first();
-		sessionName = (session?.name as string) ?? 'Session';
-		const { results } = await db
-			.prepare(
-				`SELECT re.target_sets, re.rep_min, re.rep_max, re.increment_lb AS override_lb, re.bar_id,
-				        e.id, e.name, e.measurement, e.progression, e.equipment, e.mechanic,
-				        e.movement_pattern
-				 FROM routine_exercise re JOIN exercise e ON e.id = re.exercise_id
-				 WHERE re.session_id = ? ORDER BY re.position`
-			)
-			.bind(routine_session_id)
-			.all();
-		exercises = (results as Record<string, unknown>[]).map((r) => ({
-			exercise_id: r.id as string,
-			name: r.name as string,
-			measurement: r.measurement as string,
-			progression: r.progression as string,
-			equipment: r.equipment as string | null,
-			mechanic: r.mechanic as string | null,
-			movement_pattern: r.movement_pattern as string | null,
-			target_sets: r.target_sets as number,
-			rep_min: r.rep_min as number | null,
-			rep_max: r.rep_max as number | null,
-			increment_lb: incrementFor(r.equipment as string | null, gym, r.override_lb as number | null),
-			bar_lb:
-				(gym.bars.find((b) => b.id === (r.bar_id as string | null))?.weight_lb ??
-					defaultBar?.weight_lb ??
-					45)
+		const scaffold = await sessionScaffold(db, userId, routine_session_id);
+		if (!scaffold) return json({ error: 'not found' }, { status: 404 });
+		sessionName = scaffold.name;
+		// The query belongs in routines.ts; the equipment arithmetic belongs here.
+		exercises = scaffold.exercises.map((e) => ({
+			exercise_id: e.exercise_id,
+			name: e.name,
+			measurement: e.measurement,
+			progression: e.progression,
+			equipment: e.equipment,
+			mechanic: e.mechanic,
+			movement_pattern: e.movement_pattern,
+			target_sets: e.target_sets,
+			rep_min: e.rep_min,
+			rep_max: e.rep_max,
+			increment_lb: incrementFor(e.equipment, gym, e.override_lb),
+			bar_lb: gym.bars.find((b) => b.id === e.bar_id)?.weight_lb ?? defaultBar?.weight_lb ?? 45
 		}));
 	}
 
-	const history = await lastPerformances(db, exercises.map((e) => e.exercise_id));
+	const history = await lastPerformances(db, userId, exercises.map((e) => e.exercise_id));
 
 	return json({
 		id: crypto.randomUUID(),
+		// Stamped so a shared device does not resume one person's workout as
+		// another's. The server trusts its own session, not this field.
+		user_id: userId,
 		routine_session_id: routine_session_id ?? null,
 		session_name: sessionName,
 		started_at: new Date().toISOString(),
