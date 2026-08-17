@@ -1,4 +1,4 @@
-import type { LoggedSet } from '$lib/training/types';
+import type { LoggedSet } from '../training/types.ts';
 
 export interface SyncPayload {
 	workout: {

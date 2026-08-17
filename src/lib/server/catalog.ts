@@ -1,6 +1,6 @@
-import type { Exercise } from '$lib/training/types';
-import { matchesFilter, type ExerciseFilter } from '$lib/training/filters';
-import { musclesInGroup } from '$lib/training/volume';
+import type { Exercise } from '../training/types.ts';
+import { matchesFilter, type ExerciseFilter } from '../training/filters.ts';
+import { musclesInGroup } from '../training/volume.ts';
 
 export interface ExerciseRow extends Exercise {
 	mechanic: string | null;

@@ -1,4 +1,4 @@
-import type { GymConfig, Bar, PlateStock } from '$lib/training/types';
+import type { GymConfig, Bar, PlateStock } from '../training/types.ts';
 
 export interface GymRecord extends GymConfig {
 	id: string;

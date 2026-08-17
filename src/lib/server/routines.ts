@@ -1,5 +1,5 @@
-import type { RoutineDraft } from '$lib/training/types';
-import { PROFILES } from '$lib/training/profiles';
+import type { RoutineDraft } from '../training/types.ts';
+import { PROFILES } from '../training/profiles.ts';
 import type { ExerciseRow } from './catalog.ts';
 
 export interface RoutineExerciseRow {
