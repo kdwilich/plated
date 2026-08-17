@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "plateload",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:wrangler"],
+      "port": 8787
+    }
+  ]
+}
