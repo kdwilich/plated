@@ -3,9 +3,14 @@
 	// modal. No <svelte:head> here on purpose: the route owns the document title,
 	// the modal must not touch it.
 	import type { ExerciseRow } from '$lib/server/catalog';
+	import type { PersonalRecord } from '$lib/training/records';
 	import type { LoggedSet } from '$lib/training/types';
 
-	let { exercise, history = [] }: { exercise: ExerciseRow; history: LoggedSet[][] } = $props();
+	let {
+		exercise,
+		history = [],
+		records = []
+	}: { exercise: ExerciseRow; history: LoggedSet[][]; records?: PersonalRecord[] } = $props();
 
 	const ex = $derived(exercise);
 	const youtubeUrl = $derived(
@@ -19,6 +24,46 @@
 			: null
 	);
 	const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+	function fmtDuration(s: number): string {
+		const m = Math.floor(s / 60);
+		const rem = Math.round(s % 60);
+		return m > 0 ? `${m}:${String(rem).padStart(2, '0')}` : `${rem}s`;
+	}
+
+	function recordValue(r: PersonalRecord): string {
+		switch (r.kind) {
+			case 'heaviest':
+				return `${fmt(r.value)} lb`;
+			case 'e1rm':
+			case 'best_set':
+				return `${Math.round(r.value).toLocaleString()} lb`;
+			case 'most_reps':
+				return `${r.value} reps`;
+			case 'longest':
+				return fmtDuration(r.value);
+			case 'furthest':
+				return `${fmt(r.value)} m`;
+		}
+	}
+
+	/** The set behind the number. An estimate with nothing beside it invites
+	 *  more trust than the formula has earned. */
+	function recordSet(r: PersonalRecord): string {
+		const s = r.set;
+		const parts: string[] = [];
+		if (s.weight_lb != null && s.reps != null) parts.push(`${fmt(s.weight_lb)} × ${s.reps}`);
+		else if (s.reps != null) parts.push(`× ${s.reps}`);
+		if (s.duration_s != null && r.kind !== 'longest') parts.push(fmtDuration(s.duration_s));
+		parts.push(
+			new Date(s.completed_at).toLocaleDateString(undefined, {
+				month: 'short',
+				day: 'numeric',
+				year: 'numeric'
+			})
+		);
+		return parts.join(' · ');
+	}
 </script>
 
 <h1 class="display page-title">{ex.name}</h1>
@@ -63,6 +108,23 @@
 						{#if s.weight_lb != null}{fmt(s.weight_lb)}{/if}
 						{#if s.reps != null}&nbsp;× {s.reps}{/if}
 						{#if s.duration_s != null}&nbsp;{s.duration_s}s{/if}
+					</span>
+				</li>
+			{/each}
+		</ul>
+	</div>
+{/if}
+
+{#if records.length > 0}
+	<div class="card block">
+		<span class="label">Records</span>
+		<ul>
+			{#each records as r (r.kind)}
+				<li class="hairline-row record-row">
+					<span class="num set-label">{r.label}</span>
+					<span class="record-right">
+						<span class="num record-value">{recordValue(r)}</span>
+						<span class="num record-set">{recordSet(r)}</span>
 					</span>
 				</li>
 			{/each}
@@ -140,6 +202,29 @@
 	}
 
 	.set-label {
+		font-size: 11px;
+		color: $text-faint;
+	}
+
+	.record-row {
+		min-height: 44px;
+		align-items: center;
+	}
+
+	.record-right {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 1px;
+	}
+
+	.record-value {
+		font-family: $font-display;
+		font-weight: 600;
+		font-size: 17px;
+	}
+
+	.record-set {
 		font-size: 11px;
 		color: $text-faint;
 	}

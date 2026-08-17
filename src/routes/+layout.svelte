@@ -50,6 +50,7 @@
 		<ExerciseGuide
 			exercise={page.state.guide.exercise}
 			history={page.state.guide.history}
+			records={page.state.guide.records}
 		/>
 	</GuideModal>
 {/if}

@@ -20,6 +20,7 @@ declare global {
 			guide?: {
 				exercise: import('$lib/server/catalog').ExerciseRow;
 				history: import('$lib/training/types').LoggedSet[][];
+				records: import('$lib/training/records').PersonalRecord[];
 			};
 		}
 	}
