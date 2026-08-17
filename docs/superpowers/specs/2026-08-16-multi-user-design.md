@@ -216,7 +216,11 @@ safe to apply to a database that already holds data.
   the two-pattern rule, and the new server tests.
 - **PBKDF2 against the free-plan CPU ceiling.** Open, see above.
 - **The first-signup inheritance.** A sequencing hazard, mitigated by ordering
-  in the plan.
+  in the plan. With a sharp edge found while testing: `AUTOINCREMENT` never
+  reuses an id, so deleting the first account does **not** free id 1. The next
+  signup becomes id 2 and the pre-accounts data stays stranded under a user
+  that no longer exists. Recovering means resetting `sqlite_sequence` for
+  `user`, or re-pointing the rows by hand. Sign up once, and keep it.
 - **The remote database already holds data.** Checked, rather than assumed: the
   Worker has never been deployed, but `--remote` D1 commands have run. Remote
   holds 873 exercises, one gym, one routine ("3-day split"), and **zero

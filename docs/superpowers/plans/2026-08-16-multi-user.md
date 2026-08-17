@@ -1194,3 +1194,8 @@ Do not run `npm run deploy`. Present, in one message:
    before the URL is shared with anyone. Remote holds one routine and one gym
    and no workouts, so the loss is bounded — but it is not recoverable through
    the UI, and the window closes the moment the URL is public.
+
+   **And it is one-shot.** `AUTOINCREMENT` never reuses an id, so deleting that
+   first account does not free id 1: the next signup is id 2, and the inherited
+   data is stranded under a user that no longer exists. Get the email and
+   password right the first time.
