@@ -22,6 +22,10 @@
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
+	// This route has no loader of its own; `data` is the layout's, and `user`
+	// is what loadActive needs to refuse someone else's stored session.
+	let { data } = $props();
+
 	let session = $state<ActiveSession | undefined>(undefined);
 	let openId = $state<string | null>(null);
 	let elapsed = $state('0:00');
@@ -49,7 +53,7 @@
 
 	onMount(() => {
 		void (async () => {
-			session = await loadActive();
+			session = await loadActive(data.user?.id);
 			if (!session || session.finished_at) {
 				await goto('/');
 				return;

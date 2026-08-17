@@ -39,6 +39,10 @@ export interface ActiveExercise {
 
 export interface ActiveSession {
 	id: string;
+	/** Whose workout this is. Undefined on sessions stored before accounts
+	 *  existed, which are treated as belonging to whoever is signed in — the
+	 *  same tolerance `movement_pattern` gets above. */
+	user_id?: number;
 	routine_session_id: string | null;
 	session_name: string;
 	started_at: string;
@@ -95,8 +99,23 @@ export async function persistStorage(): Promise<void> {
 	}
 }
 
-export const loadActive = (): Promise<ActiveSession | undefined> =>
+const readActive = (): Promise<ActiveSession | undefined> =>
 	tx(ACTIVE, 'readonly', (s) => s.get('current') as IDBRequest<ActiveSession | undefined>);
+
+/**
+ * The stored session, but only if it belongs to whoever is signed in. A shared
+ * phone must not hand one person's workout to the next, and the stored copy
+ * holds real training data, so a mismatch clears rather than resumes.
+ */
+export async function loadActive(userId?: number): Promise<ActiveSession | undefined> {
+	const session = await readActive();
+	if (!session) return undefined;
+	if (userId !== undefined && session.user_id !== undefined && session.user_id !== userId) {
+		await clearActive();
+		return undefined;
+	}
+	return session;
+}
 
 export const saveActive = (session: ActiveSession): Promise<IDBValidKey> =>
 	tx(ACTIVE, 'readwrite', (s) => s.put(structuredCloneSafe(session), 'current'));
@@ -139,6 +158,9 @@ const outboxAll = (): Promise<OutboxEntry[]> => tx(OUTBOX, 'readonly', (s) => s.
 
 const outboxDelete = (id: string): Promise<undefined> => tx(OUTBOX, 'readwrite', (s) => s.delete(id));
 
+/** How many finished workouts are still waiting to reach the server. */
+export const outboxCount = (): Promise<number> => outboxAll().then((e) => e.length);
+
 /** Push everything pending. Safe to call any time; failures just wait. */
 export async function drainOutbox(): Promise<{ sent: number; pending: number }> {
 	const entries = await outboxAll();
@@ -150,6 +172,10 @@ export async function drainOutbox(): Promise<{ sent: number; pending: number }> 
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(entry)
 			});
+			// Only a success deletes, so nothing is ever lost to a failed push.
+			// A 401 means the session expired: the rest would fail identically,
+			// and these keep until someone signs back in.
+			if (res.status === 401) break;
 			if (res.ok) {
 				await outboxDelete(entry.workout.id);
 				sent++;

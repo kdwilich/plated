@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { outboxCount } from '$lib/client/session';
 
 	let { data, form } = $props();
 
@@ -9,6 +10,25 @@
 	const barsText = $derived(
 		data.gym.bars.map((b) => `${b.name}:${b.weight_lb}${b.is_default ? '*' : ''}`).join(', ')
 	);
+
+	// Signing out ends the session the outbox needs, so anything still pending
+	// would sit undelivered until the next sign-in. Worth one question.
+	// Cancelled unconditionally first: the check is async, and by the time an
+	// awaited answer came back the form would already have gone.
+	function confirmSignOut(e: SubmitEvent) {
+		e.preventDefault();
+		const el = e.currentTarget as HTMLFormElement;
+		void (async () => {
+			const pending = await outboxCount();
+			const workouts = pending === 1 ? 'workout' : 'workouts';
+			if (
+				pending === 0 ||
+				confirm(`${pending} finished ${workouts} still need to sync. Sign out anyway?`)
+			) {
+				el.submit(); // bypasses this handler, so it cannot loop
+			}
+		})();
+	}
 </script>
 
 <svelte:head><title>Plateload — gym</title></svelte:head>
@@ -66,7 +86,7 @@
 	<p class="label">Account</p>
 	<div class="account-row">
 		<span class="email">{data.user?.email}</span>
-		<form method="POST" action="/logout">
+		<form method="POST" action="/logout" onsubmit={confirmSignOut}>
 			<button class="btn quiet" type="submit">Sign out</button>
 		</form>
 	</div>

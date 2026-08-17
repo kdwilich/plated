@@ -9,7 +9,7 @@
 	let starting = $state(false);
 
 	onMount(async () => {
-		resumable = await loadActive();
+		resumable = await loadActive(data.user?.id);
 	});
 
 	async function start(routineSessionId: string | null) {
