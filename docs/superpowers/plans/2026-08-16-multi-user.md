@@ -1096,22 +1096,24 @@ cd /Volumes/home/docker/plateload && git add -A && git commit -m "feat(sync): ke
 
 ---
 
-### Task 13: Make `seed.sql` re-runnable
+### Task 13: Make `seed.sql` catalog-only
+
+- [x] **Step 2 was based on a false premise** — checked, and dropped
+
+The seed was believed not to be re-runnable. It is: every one of the 873
+exercise statements is already an `INSERT ... ON CONFLICT(id) DO UPDATE`
+upsert, with a comment in the generator explaining why. Applying the file twice
+against local D1 leaves 873 rows, not 1746. Nothing to fix here.
 
 **Files:**
 - Modify: `d1/seed.sql`, `scripts/seed-exercises.mjs`
 
 - [ ] **Step 1: Catalog only**
 
-Delete the seven `gym-default` rows (lines ~4683–4690); `bootstrapUser` owns
-that now.
-
-- [ ] **Step 2: `INSERT OR REPLACE`**
-
-The 873 `INSERT INTO exercise` statements become `INSERT OR REPLACE INTO
-exercise`, generated that way by `scripts/seed-exercises.mjs`. This is the
-deferred problem that has blocked corrected `movement_pattern` values from
-reaching a real database.
+Delete the seven `gym-default` rows; `bootstrapUser` owns that now. They matter
+beyond tidiness: the bar ids were global (`bar-straight-45` for everyone), and
+an ownerless gym carrying `user_id = 1` could be picked by `getGym` over the
+account's own.
 
 - [ ] **Step 3: Prove it twice**
 

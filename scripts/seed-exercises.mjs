@@ -295,16 +295,10 @@ function fallbackPattern(e) {
 	return null;
 }
 
-// Default gym so the app works before any setup.
-lines.push(`INSERT OR IGNORE INTO gym (id, name) VALUES ('gym-default', 'My gym');`);
-for (const eq of ['barbell', 'dumbbell', 'machine', 'cable', 'body only', 'e-z curl bar', 'kettlebells']) {
-	lines.push(`INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', '${eq}');`);
-}
-for (const d of [45, 35, 25, 10, 5, 2.5]) {
-	lines.push(`INSERT OR IGNORE INTO gym_plate (gym_id, denomination_lb, pairs) VALUES ('gym-default', ${d}, 10);`);
-}
-lines.push(`INSERT OR IGNORE INTO gym_bar (id, gym_id, name, weight_lb, is_default) VALUES ('bar-straight-45', 'gym-default', 'Straight bar', 45, 1);`);
-lines.push(`INSERT OR IGNORE INTO gym_bar (id, gym_id, name, weight_lb, is_default) VALUES ('bar-ez-25', 'gym-default', 'EZ curl bar', 25, 0);`);
+// No default gym. A gym belongs to an account, and bootstrapUser in
+// src/lib/server/gym.ts creates one at signup. Seeding a shared 'gym-default'
+// row here would leave an ownerless gym that getGym could pick over the
+// account's own, and its bar ids were global — 'bar-straight-45' for everyone.
 
 writeFileSync(OUT, lines.join('\n') + '\n');
 

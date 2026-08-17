@@ -4680,19 +4680,3 @@ As you exhale, use your biceps to curl the weights up until they are fully contr
 Squeeze the biceps hard for a second at the contracted position and rotate your wrists so that the palms are facing down again.
 Repeat for the recommended amount of repetitions.',NULL,'Zottman_Preacher_Curl/0.jpg') ON CONFLICT(id) DO UPDATE SET name=excluded.name,measurement=excluded.measurement,movement_pattern=excluded.movement_pattern,progression=excluded.progression,equipment=excluded.equipment,primary_muscles=excluded.primary_muscles,secondary_muscles=excluded.secondary_muscles,unilateral=excluded.unilateral,mechanic=excluded.mechanic,level=excluded.level,priority=excluded.priority,instructions=excluded.instructions,cues=excluded.cues,image=excluded.image;
 INSERT INTO exercise_fts (id, name, aliases) VALUES ('Zottman_Preacher_Curl','Zottman Preacher Curl','');
-INSERT OR IGNORE INTO gym (id, name) VALUES ('gym-default', 'My gym');
-INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', 'barbell');
-INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', 'dumbbell');
-INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', 'machine');
-INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', 'cable');
-INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', 'body only');
-INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', 'e-z curl bar');
-INSERT OR IGNORE INTO gym_equipment (gym_id, equipment_key) VALUES ('gym-default', 'kettlebells');
-INSERT OR IGNORE INTO gym_plate (gym_id, denomination_lb, pairs) VALUES ('gym-default', 45, 10);
-INSERT OR IGNORE INTO gym_plate (gym_id, denomination_lb, pairs) VALUES ('gym-default', 35, 10);
-INSERT OR IGNORE INTO gym_plate (gym_id, denomination_lb, pairs) VALUES ('gym-default', 25, 10);
-INSERT OR IGNORE INTO gym_plate (gym_id, denomination_lb, pairs) VALUES ('gym-default', 10, 10);
-INSERT OR IGNORE INTO gym_plate (gym_id, denomination_lb, pairs) VALUES ('gym-default', 5, 10);
-INSERT OR IGNORE INTO gym_plate (gym_id, denomination_lb, pairs) VALUES ('gym-default', 2.5, 10);
-INSERT OR IGNORE INTO gym_bar (id, gym_id, name, weight_lb, is_default) VALUES ('bar-straight-45', 'gym-default', 'Straight bar', 45, 1);
-INSERT OR IGNORE INTO gym_bar (id, gym_id, name, weight_lb, is_default) VALUES ('bar-ez-25', 'gym-default', 'EZ curl bar', 25, 0);

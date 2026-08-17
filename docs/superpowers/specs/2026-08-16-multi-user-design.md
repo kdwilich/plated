@@ -187,11 +187,18 @@ session expiry.
 
 ## Folded-in scope
 
-`seed.sql` becomes catalog-only and re-runnable. This has been a known deferred
-problem — 873 plain `INSERT INTO exercise` statements that cannot be applied
-twice — and it stops being deferrable here, because multi-user is the first
-change that must actually reach a deployed database. Recorded as scope added on
-purpose rather than discovered late.
+`seed.sql` becomes catalog-only.
+
+**Correction to an earlier premise:** the seed was described here and elsewhere
+as not re-runnable. It is. Every one of the 873 exercise statements is already
+an `INSERT ... ON CONFLICT(id) DO UPDATE` upsert, and applying the file twice
+against local D1 leaves 873 rows. That was verified rather than assumed, and
+the claim it replaces was not.
+
+What does have to go is the `gym-default` block: seven rows creating a shared
+gym whose bar ids were global — `bar-straight-45` for every account. Left in,
+`getGym` could pick that ownerless gym over the account's own, since both would
+carry `user_id = 1`. `bootstrapUser` owns that job now.
 
 ## Migration
 
