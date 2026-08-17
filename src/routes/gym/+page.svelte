@@ -60,6 +60,18 @@
 	<button class="btn primary save" type="submit">Save gym</button>
 </form>
 
+<!-- The account lives here rather than in a fifth tab: this is already the
+     settings-shaped page, and signing out is a once-in-a-while act. -->
+<section class="account">
+	<p class="label">Account</p>
+	<div class="account-row">
+		<span class="email">{data.user?.email}</span>
+		<form method="POST" action="/logout">
+			<button class="btn quiet" type="submit">Sign out</button>
+		</form>
+	</div>
+</section>
+
 <style lang="scss">
 	.page-title {
 		font-size: 30px;
@@ -124,5 +136,27 @@
 
 	.save {
 		width: 100%;
+	}
+
+	.account {
+		margin-top: $space-6;
+		padding-top: $space-4;
+		border-top: 1px solid $hairline;
+	}
+
+	.account-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: $space-3;
+		margin-top: $space-2;
+	}
+
+	.email {
+		font-size: 14px;
+		color: $text-dim;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 </style>

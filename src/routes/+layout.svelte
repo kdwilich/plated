@@ -8,7 +8,7 @@
 	import GuideModal from '$lib/components/GuideModal.svelte';
 	import ExerciseGuide from '$lib/components/ExerciseGuide.svelte';
 
-	let { children } = $props();
+	let { children, data } = $props();
 
 	onMount(() => {
 		void persistStorage();
@@ -28,15 +28,18 @@
 	}
 </script>
 
-<div class="shell">
+<div class="shell" class:signed-out={!data.user}>
 	<main>
 		{@render children()}
 	</main>
-	<nav>
-		{#each tabs as tab (tab.href)}
-			<a href={tab.href} class={{ active: isActive(tab.href) }}>{tab.label}</a>
-		{/each}
-	</nav>
+	<!-- A tab bar on the sign-in screen leads nowhere. -->
+	{#if data.user}
+		<nav>
+			{#each tabs as tab (tab.href)}
+				<a href={tab.href} class={{ active: isActive(tab.href) }}>{tab.label}</a>
+			{/each}
+		</nav>
+	{/if}
 </div>
 
 <!-- Lives in the layout so every GuideLink gets it without its host wiring
@@ -63,6 +66,11 @@
 	main {
 		flex: 1;
 		padding: $space-4 $space-4 calc($thumb-bar + $space-5);
+	}
+
+	// Without the tab bar there is nothing to clear at the bottom.
+	.signed-out main {
+		padding-bottom: $space-5;
 	}
 
 	nav {

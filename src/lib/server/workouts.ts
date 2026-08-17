@@ -26,14 +26,26 @@ export interface SyncPayload {
  * Idempotent ingest: every id is a client UUID, so a retried POST replaces
  * identical rows instead of duplicating them. One batch = one transaction.
  */
-export async function ingestWorkout(db: D1Database, payload: SyncPayload): Promise<void> {
+export async function ingestWorkout(
+	db: D1Database,
+	userId: number,
+	payload: SyncPayload
+): Promise<void> {
 	const w = payload.workout;
+	// Ids are client-generated, so a client can send one it has merely seen.
+	// Ownership comes from the session and nothing in the body influences it.
+	const owner = await db
+		.prepare('SELECT user_id FROM workout WHERE id = ?')
+		.bind(w.id)
+		.first<{ user_id: number }>();
+	if (owner && owner.user_id !== userId) return;
+
 	const stmts = [
 		db
 			.prepare(
-				'INSERT OR REPLACE INTO workout (id, routine_session_id, started_at, finished_at, notes) VALUES (?, ?, ?, ?, ?)'
+				'INSERT OR REPLACE INTO workout (id, routine_session_id, started_at, finished_at, notes, user_id) VALUES (?, ?, ?, ?, ?, ?)'
 			)
-			.bind(w.id, w.routine_session_id, w.started_at, w.finished_at, w.notes),
+			.bind(w.id, w.routine_session_id, w.started_at, w.finished_at, w.notes, userId),
 		// A re-sync after an in-session edit must not leave orphaned sets behind.
 		db.prepare('DELETE FROM workout_set WHERE workout_id = ?').bind(w.id)
 	];
@@ -67,6 +79,7 @@ export async function ingestWorkout(db: D1Database, payload: SyncPayload): Promi
  */
 export async function lastPerformances(
 	db: D1Database,
+	userId: number,
 	exerciseIds: string[]
 ): Promise<Record<string, LoggedSet[][]>> {
 	if (exerciseIds.length === 0) return {};
@@ -76,11 +89,11 @@ export async function lastPerformances(
 			`SELECT ws.exercise_id, ws.workout_id, ws.weight_lb, ws.reps, ws.duration_s, ws.is_warmup, ws.completed_at, ws.position
 			 FROM workout_set ws
 			 JOIN workout w ON w.id = ws.workout_id
-			 WHERE ws.exercise_id IN (${marks}) AND w.finished_at IS NOT NULL
+			 WHERE ws.exercise_id IN (${marks}) AND w.finished_at IS NOT NULL AND w.user_id = ?
 			 ORDER BY ws.completed_at DESC
 			 LIMIT 400`
 		)
-		.bind(...exerciseIds)
+		.bind(...exerciseIds, userId)
 		.all();
 
 	const out: Record<string, LoggedSet[][]> = {};
@@ -109,10 +122,14 @@ export async function lastPerformances(
 }
 
 /** Sets go too — the schema cascades, but D1 needs foreign keys enabled. */
-export async function deleteWorkout(db: D1Database, id: string): Promise<void> {
+export async function deleteWorkout(db: D1Database, userId: number, id: string): Promise<void> {
 	await db.batch([
-		db.prepare('DELETE FROM workout_set WHERE workout_id = ?').bind(id),
-		db.prepare('DELETE FROM workout WHERE id = ?').bind(id)
+		db
+			.prepare(
+				'DELETE FROM workout_set WHERE workout_id IN (SELECT id FROM workout WHERE id = ? AND user_id = ?)'
+			)
+			.bind(id, userId),
+		db.prepare('DELETE FROM workout WHERE id = ? AND user_id = ?').bind(id, userId)
 	]);
 }
 
@@ -127,7 +144,11 @@ export interface WorkoutSummary {
 	total_volume_lb: number;
 }
 
-export async function recentWorkouts(db: D1Database, limit = 30): Promise<WorkoutSummary[]> {
+export async function recentWorkouts(
+	db: D1Database,
+	userId: number,
+	limit = 30
+): Promise<WorkoutSummary[]> {
 	const { results } = await db
 		.prepare(
 			`SELECT w.id, w.routine_session_id, rs.name AS session_name, w.started_at, w.finished_at,
@@ -137,41 +158,48 @@ export async function recentWorkouts(db: D1Database, limit = 30): Promise<Workou
 			 FROM workout w
 			 LEFT JOIN workout_set ws ON ws.workout_id = w.id
 			 LEFT JOIN routine_session rs ON rs.id = w.routine_session_id
-			 WHERE w.finished_at IS NOT NULL
+			 WHERE w.finished_at IS NOT NULL AND w.user_id = ?
 			 GROUP BY w.id ORDER BY w.started_at DESC LIMIT ?`
 		)
-		.bind(limit)
+		.bind(userId, limit)
 		.all();
 	return results as unknown as WorkoutSummary[];
 }
 
-export async function workoutDetail(db: D1Database, id: string) {
+export async function workoutDetail(db: D1Database, userId: number, id: string) {
+	// workout_set carries no owner; it inherits one through this join.
 	const [workout, sets] = await db.batch([
 		db
 			.prepare(
-				'SELECT w.*, rs.name AS session_name FROM workout w LEFT JOIN routine_session rs ON rs.id = w.routine_session_id WHERE w.id = ?'
+				'SELECT w.*, rs.name AS session_name FROM workout w LEFT JOIN routine_session rs ON rs.id = w.routine_session_id WHERE w.id = ? AND w.user_id = ?'
 			)
-			.bind(id),
+			.bind(id, userId),
 		db
 			.prepare(
 				`SELECT ws.*, e.name AS exercise_name, e.measurement FROM workout_set ws
-				 JOIN exercise e ON e.id = ws.exercise_id WHERE ws.workout_id = ? ORDER BY ws.position`
+				 JOIN exercise e ON e.id = ws.exercise_id
+				 JOIN workout w ON w.id = ws.workout_id
+				 WHERE ws.workout_id = ? AND w.user_id = ? ORDER BY ws.position`
 			)
-			.bind(id)
+			.bind(id, userId)
 	]);
 	return { workout: workout.results[0] ?? null, sets: sets.results };
 }
 
 /** The last finished rotation position for this routine, or null. */
-export async function lastCompletedPosition(db: D1Database, routineId: string): Promise<number | null> {
+export async function lastCompletedPosition(
+	db: D1Database,
+	userId: number,
+	routineId: string
+): Promise<number | null> {
 	const row = await db
 		.prepare(
 			`SELECT rs.position FROM workout w
 			 JOIN routine_session rs ON rs.id = w.routine_session_id
-			 WHERE rs.routine_id = ? AND w.finished_at IS NOT NULL
+			 WHERE rs.routine_id = ? AND w.finished_at IS NOT NULL AND w.user_id = ?
 			 ORDER BY w.started_at DESC LIMIT 1`
 		)
-		.bind(routineId)
+		.bind(routineId, userId)
 		.first();
 	return (row?.position as number | undefined) ?? null;
 }
@@ -179,6 +207,7 @@ export async function lastCompletedPosition(db: D1Database, routineId: string): 
 /** (muscle group source data) — primary muscles of everything trained recently. */
 export async function recentTrainedMuscles(
 	db: D1Database,
+	userId: number,
 	days = 30
 ): Promise<{ primary_muscles: string; completed_at: string }[]> {
 	const since = new Date(Date.now() - days * 86_400_000).toISOString();
@@ -188,9 +217,9 @@ export async function recentTrainedMuscles(
 			 JOIN exercise e ON e.id = ws.exercise_id
 			 JOIN workout w ON w.id = ws.workout_id
 			 WHERE ws.completed_at > ? AND ws.is_warmup = 0 AND w.finished_at IS NOT NULL
-			   AND e.movement_pattern IS NOT NULL`
+			   AND w.user_id = ? AND e.movement_pattern IS NOT NULL`
 		)
-		.bind(since)
+		.bind(since, userId)
 		.all();
 	return results as unknown as { primary_muscles: string; completed_at: string }[];
 }
