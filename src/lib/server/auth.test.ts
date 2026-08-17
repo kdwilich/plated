@@ -33,7 +33,15 @@ test('the iteration count travels with the hash', async () => {
 	const [scheme, algo, iters] = (await hashPassword('x')).split('$');
 	assert.equal(scheme, 'pbkdf2');
 	assert.equal(algo, 'sha256');
-	assert.ok(Number(iters) >= 600000);
+	assert.equal(Number(iters), 100_000);
+});
+
+test('the iteration count stays within what Workers will run', async () => {
+	// Cloudflare refuses PBKDF2 above 100,000 outright, and `wrangler dev` does
+	// not enforce the cap — so nothing but this test stands between a raised
+	// constant and a 500 on every sign-in in production.
+	const iters = Number((await hashPassword('x')).split('$')[2]);
+	assert.ok(iters <= 100_000, `Workers caps PBKDF2 at 100000; got ${iters}`);
 });
 
 test('a hash written at a different iteration count still verifies', async () => {
