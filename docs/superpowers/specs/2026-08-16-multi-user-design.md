@@ -27,7 +27,7 @@ them block a second person using the app.
 ## The catalog needs nothing
 
 `is_custom` appears nowhere in `src/`. There is no create-your-own-exercise
-feature, so all 1746 exercises are shared reference data and `catalog.ts` is
+feature, so all 873 exercises are shared reference data and `catalog.ts` is
 untouched by this work. The `exercise_fts` virtual table, which has no user
 column and could not easily gain one, never has to distinguish owners.
 
@@ -121,9 +121,9 @@ that forgets it does not compile.
 
 This is why the `DEFAULT 1` on the four existing columns stays. Removing a
 column default in SQLite requires rebuilding the table, and rebuilding four
-tables that are referenced by foreign keys — one of them holding 1746 rows —
-is more risk than the guarantee is worth when the compiler already provides a
-stronger one.
+tables that are referenced by foreign keys — one of them holding 873 rows that
+everything else points at — is more risk than the guarantee is worth when the
+compiler already provides a stronger one.
 
 Two patterns, and only two:
 
@@ -188,7 +188,7 @@ session expiry.
 ## Folded-in scope
 
 `seed.sql` becomes catalog-only and re-runnable. This has been a known deferred
-problem — 1746 plain `INSERT INTO exercise` statements that cannot be applied
+problem — 873 plain `INSERT INTO exercise` statements that cannot be applied
 twice — and it stops being deferrable here, because multi-user is the first
 change that must actually reach a deployed database. Recorded as scope added on
 purpose rather than discovered late.
@@ -210,6 +210,9 @@ safe to apply to a database that already holds data.
 - **PBKDF2 against the free-plan CPU ceiling.** Open, see above.
 - **The first-signup inheritance.** A sequencing hazard, mitigated by ordering
   in the plan.
-- **Applying the migration to a remote database whose state is unverified.** The
-  Worker has never been deployed, but a `--remote` D1 command may have run. The
-  plan checks before it writes.
+- **The remote database already holds data.** Checked, rather than assumed: the
+  Worker has never been deployed, but `--remote` D1 commands have run. Remote
+  holds 873 exercises, one gym, one routine ("3-day split"), and **zero
+  workouts**. So the first-signup hazard is real but narrow — a routine and a
+  gym are at stake, no training history. The migration alters no column and can
+  be applied to it safely.

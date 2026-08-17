@@ -202,18 +202,22 @@ cd /Volumes/home/docker/plateload && git add -A && git commit -m "test: make the
 - Create: `d1/migrations/0001_multi_user.sql`
 - Modify: `wrangler.toml`
 
-- [ ] **Step 1: Check what the remote database actually contains**
+- [x] **Step 1: Check what the remote database actually contains** — done
 
-The Worker has never been deployed, but a `--remote` D1 command may have run.
-Find out before writing anything to it.
+The Worker has never been deployed, but `--remote` D1 commands have. Findings:
 
-```bash
-cd /Volumes/home/docker/plateload && npx wrangler d1 execute plateload-db --remote --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-```
+| | |
+| --- | --- |
+| tables | the full schema, all present |
+| exercises | 873 |
+| gyms | 1 |
+| routines | 1 — "3-day split", active, created 2026-08-16 |
+| workouts / sets | **0** |
 
-Record the result in the task notes. If it errors or returns nothing, the remote
-database is empty and the deploy path is clean. **Do not run any remote write
-in this task** — remote application is the owner's call, in Task 14.
+So the remote database is live but holds no training history. The first-signup
+hazard therefore risks a routine and a gym, not a training log. The migration
+alters no column, so it is safe to apply here. **No remote write happens in this
+task** — that is the owner's call, in Task 14.
 
 - [ ] **Step 2: Point wrangler at the migrations directory**
 
@@ -1104,7 +1108,7 @@ that now.
 
 - [ ] **Step 2: `INSERT OR REPLACE`**
 
-The 1746 `INSERT INTO exercise` statements become `INSERT OR REPLACE INTO
+The 873 `INSERT INTO exercise` statements become `INSERT OR REPLACE INTO
 exercise`, generated that way by `scripts/seed-exercises.mjs`. This is the
 deferred problem that has blocked corrected `movement_pattern` values from
 reaching a real database.
@@ -1115,8 +1119,8 @@ reaching a real database.
 cd /Volumes/home/docker/plateload && npm run seed && npx wrangler d1 execute plateload-db --local --file d1/seed.sql && npx wrangler d1 execute plateload-db --local --file d1/seed.sql && npx wrangler d1 execute plateload-db --local --command "SELECT COUNT(*) FROM exercise"
 ```
 
-Expected: applying it twice succeeds, and the count is 1746 both times — not
-3492, and not an error.
+Expected: applying it twice succeeds, and the count is 873 both times — not
+1746, and not an error.
 
 - [ ] **Step 4: Commit**
 
@@ -1185,5 +1189,6 @@ Do not run `npm run deploy`. Present, in one message:
 3. **The first-signup hazard, stated plainly:** the remote database's existing
    rows all read `user_id = 1`, and the first account created will be id 1 and
    will inherit them. Whoever deploys must apply the migration and sign up
-   before the URL is shared with anyone. Getting this wrong hands a stranger the
-   owner's entire training history, and it is not recoverable through the UI.
+   before the URL is shared with anyone. Remote holds one routine and one gym
+   and no workouts, so the loss is bounded — but it is not recoverable through
+   the UI, and the window closes the moment the URL is public.

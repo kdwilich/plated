@@ -13,3 +13,6 @@ directory = ".svelte-kit/cloudflare"
 binding = "DB"
 database_name = "plateload-db"
 database_id = "dc08d426-db27-4e9d-b6af-b06ba7ee7843"
+# schema.sql builds a database from nothing; migrations change one that already
+# has data in it. wrangler looks in ./migrations unless told otherwise.
+migrations_dir = "d1/migrations"
