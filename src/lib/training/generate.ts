@@ -11,7 +11,7 @@ import type {
 } from './types.ts';
 import { PROFILES } from './profiles.ts';
 import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup } from './volume.ts';
-import { primaryGroups, type Force } from './filters.ts';
+import { primaryGroups, secondaryGroups, type Force } from './filters.ts';
 
 export type SplitStyle = 'full_body' | 'targeted';
 export type Emphasis = 'balanced' | 'lower' | 'upper';
@@ -216,6 +216,24 @@ function applyEmphasis(template: Template, emphasis: Emphasis): Template {
 }
 
 /**
+ * The most direct sets one muscle group usefully takes in a single session.
+ * Weekly volume is the thing that drives growth, but it has to be delivered in
+ * doses — fourteen sets of chest in one afternoon is not the same stimulus as
+ * fourteen spread over two days, and the back half of that session is fatigue
+ * with nothing to show for it.
+ */
+const MAX_DIRECT_SETS_PER_SESSION = 10;
+
+const sessionSets = (s: SessionDraft): number =>
+	s.exercises.reduce((total, pe) => total + pe.target_sets, 0);
+
+const directSetsInSession = (s: SessionDraft, group: string): number =>
+	s.exercises.reduce(
+		(total, pe) => (primaryGroups(pe.exercise).includes(group) ? total + pe.target_sets : total),
+		0
+	);
+
+/**
  * Priority order, adjusted for what the session already holds.
  *
  * The one adjustment so far: a hinge that follows a squat should be the one
@@ -388,7 +406,10 @@ export function generate(input: GenerateInput): RoutineDraft {
 		return inUpper ? mid : inLower ? maintenance : profile.weekly_sets_min;
 	};
 
-	const cap = Math.max(profile.compound.sets, profile.isolation.sets) + 2;
+	// One cap for everything made a fifth set of barbell squats and a fifth set
+	// of hanging leg raises the same prescription. They are not.
+	const capFor = (p: Picked): number =>
+		p.kind === 'compound' ? profile.compound.sets + 1 : profile.isolation.sets + 1;
 	const all = picked.map((p) => p.pe);
 	// Only the groups a routine owes direct work to get chased. traps and
 	// lower back are scored and displayed but sit outside MAJOR_GROUPS,
@@ -398,33 +419,66 @@ export function generate(input: GenerateInput): RoutineDraft {
 	const owed = new Set<string>(MAJOR_GROUPS);
 	for (let iter = 0; iter < 80; iter++) {
 		const vol = weeklySetsByGroup(draft);
-		const pick = all.find(
-			(pe) =>
-				pe.target_sets < cap &&
-				pe.exercise.primary_muscles.some((m) => {
-					const g = muscleGroup(m);
-					return g !== null && owed.has(g) && (vol[g] ?? 0) < targetFor(g);
-				})
-		);
+		// The set goes to whichever eligible exercise has the fewest, so volume
+		// spreads across a session instead of saturating whatever the template
+		// happened to list first — which is the only reason the old pass
+		// produced 5/5/5 and called it a prescription.
+		let pick: PrescribedExercise | undefined;
+		let fewest = Infinity;
+		for (const p of picked) {
+			if (p.pe.target_sets >= capFor(p)) continue;
+			if (p.pe.target_sets >= fewest) continue;
+			if (sessionSets(p.session) >= profile.session_set_cap) continue;
+			const groups = primaryGroups(p.pe.exercise);
+			// Never past the top of the profile's range, and never past what one
+			// session can usefully give a single muscle. Secondary groups count
+			// here too: a set added to a row is half a set of biceps whether or
+			// not biceps is what the set was for.
+			const credited = [...groups, ...secondaryGroups(p.pe.exercise)];
+			if (credited.some((g) => (vol[g] ?? 0) >= profile.weekly_sets_max)) continue;
+			if (groups.some((g) => directSetsInSession(p.session, g) >= MAX_DIRECT_SETS_PER_SESSION)) continue;
+			const eligible = groups.some((g) => owed.has(g) && (vol[g] ?? 0) < targetFor(g));
+			if (!eligible) continue;
+			pick = p.pe;
+			fewest = p.pe.target_sets;
+		}
 		if (!pick) break;
 		pick.target_sets += 1;
 	}
 
 	// The pass above can only add sets to an exercise that trains the group
-	// directly. A group with no direct work at all is invisible to it, so it
-	// would sit under target forever without anyone being told.
+	// directly, and only up to the caps. Both ways of falling short are worth
+	// saying out loud: a group with no direct work at all is invisible to the
+	// pass, and a group whose few slots ran out of room is invisible to the
+	// volume table, which shows a number without saying it is as high as this
+	// structure goes.
 	const finalVolume = weeklySetsByGroup(draft);
 	for (const group of MAJOR_GROUPS) {
 		const direct = all.some((pe) =>
 			pe.exercise.primary_muscles.some((m) => muscleGroup(m) === group)
 		);
-		if (direct) continue;
-		const indirect = finalVolume[group] ?? 0;
-		warnings.push(
-			indirect > 0
-				? `${group} only gets indirect work (${indirect} sets). Add a ${group} exercise if you want it trained directly.`
-				: `Nothing in this routine trains ${group}.`
-		);
+		const sets = finalVolume[group] ?? 0;
+		if (!direct) {
+			warnings.push(
+				sets > 0
+					? `${group} only gets indirect work (${sets} sets). Add another ${group} exercise if you want it trained directly.`
+					: `Nothing in this routine trains ${group}.`
+			);
+			continue;
+		}
+		if (sets < profile.weekly_sets_min) {
+			warnings.push(
+				`${group} gets ${sets} sets a week, under the ${profile.weekly_sets_min} this profile aims for. Add another ${group} exercise or another training day.`
+			);
+		} else if (sets > profile.weekly_sets_max) {
+			// The volume pass will not add past the ceiling, but the template's
+			// own slots can sit above it — six quad-primary slots across four
+			// full body days overshoot before a single set is added. Trimming
+			// them is the lifter's call, so this says so rather than acting.
+			warnings.push(
+				`${group} gets ${sets} sets a week, over the ${profile.weekly_sets_max} this profile tops out at. Drop a ${group} exercise if the sessions feel long.`
+			);
+		}
 	}
 
 	return draft;
