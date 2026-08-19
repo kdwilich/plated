@@ -127,11 +127,14 @@
 			})}
 		</p>
 	</div>
-	{#if editing}
-		<button class="edit-toggle label" onclick={cancel} disabled={saving}>Cancel</button>
-	{:else}
-		<button class="edit-toggle label" onclick={startEdit}>Edit</button>
-	{/if}
+	<button
+		class="btn-sm label"
+		aria-pressed={editing}
+		onclick={editing ? cancel : startEdit}
+		disabled={saving}
+	>
+		{editing ? 'Cancel' : 'Edit'}
+	</button>
 </header>
 
 {#if editing}
@@ -237,19 +240,6 @@
 		margin-bottom: $space-4;
 	}
 
-	.edit-toggle {
-		padding: 0 $space-3;
-		min-height: 32px;
-		border: 1px solid $hairline;
-		border-radius: $radius;
-		color: $text-dim;
-		flex: none;
-
-		&:active {
-			background: $hairline;
-		}
-	}
-
 	.edit-hint {
 		font-size: 12px;
 		color: $signal;
@@ -315,7 +305,7 @@
 
 	.cell {
 		width: 4.5ch;
-		min-height: $tap-target - 12px;
+		min-height: $tap-target-sm;
 		padding: 0 $space-2;
 		border: 1px solid $hairline;
 		border-radius: $radius;
@@ -336,8 +326,8 @@
 	}
 
 	.drop {
-		min-width: 32px;
-		min-height: 32px;
+		min-width: $tap-target-sm;
+		min-height: $tap-target-sm;
 		color: $text-faint;
 		font-size: 18px;
 		line-height: 1;

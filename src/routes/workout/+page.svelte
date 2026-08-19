@@ -250,7 +250,7 @@
 		<div class="head-right">
 			<span class="num elapsed">{elapsed}</span>
 			{#if session.exercises.length > 0}
-				<button class="edit-toggle label" aria-pressed={editing} onclick={toggleEdit}>
+				<button class="btn-sm label" aria-pressed={editing} onclick={toggleEdit}>
 					{editing ? 'Done' : 'Edit'}
 				</button>
 			{/if}
@@ -464,23 +464,6 @@
 		color: $text-faint;
 	}
 
-	.edit-toggle {
-		padding: 0 $space-3;
-		min-height: 32px;
-		border: 1px solid $hairline;
-		border-radius: $radius;
-		color: $text-dim;
-
-		&[aria-pressed='true'] {
-			border-color: $signal;
-			color: $signal;
-		}
-
-		&:active {
-			background: $hairline;
-		}
-	}
-
 	.edit-hint {
 		font-size: 12px;
 		color: $text-faint;
@@ -671,7 +654,7 @@
 
 	.chip {
 		padding: $space-2 $space-3;
-		min-height: 36px;
+		min-height: $tap-target-sm;
 		border: 1px solid $hairline;
 		border-radius: $radius;
 		font-size: 13px;

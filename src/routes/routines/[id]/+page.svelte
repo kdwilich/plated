@@ -346,7 +346,7 @@
 		align-items: center;
 		justify-content: center;
 		min-width: $tap-target;
-		min-height: 36px;
+		min-height: $tap-target-sm;
 		font-size: 14px;
 		line-height: 1;
 		color: $text-dim;

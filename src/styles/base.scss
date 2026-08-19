@@ -51,6 +51,12 @@ body {
 		background: $hairline;
 	}
 
+	// .btn paints its own background and colour, so the UA's greying never
+	// showed through — a disabled Save read as tappable as a live one.
+	&:disabled {
+		opacity: 0.4;
+	}
+
 	&.primary {
 		background: $text;
 		border-color: $text;
@@ -67,6 +73,37 @@ body {
 		color: $danger;
 		border-color: $danger;
 		background: none;
+	}
+}
+
+// Small action beside a heading or inside a row, where a full .btn would
+// dominate. Compose with .label for the uppercase mono type the app uses on
+// chrome: `class="btn-sm label"`. aria-pressed carries the armed state, so a
+// screen in edit mode says so in signal yellow. Declared after .label so its
+// colour wins the tie between two single-class selectors.
+.btn-sm {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	min-height: $tap-target-sm;
+	padding: 0 $space-3;
+	border: 1px solid $hairline;
+	border-radius: $radius;
+	color: $text-dim;
+
+	&[aria-pressed='true'] {
+		border-color: $signal;
+		color: $signal;
+	}
+
+	&:active {
+		background: $hairline;
+	}
+
+	&:disabled {
+		color: $text-faint;
+		border-color: $hairline-faint;
 	}
 }
 

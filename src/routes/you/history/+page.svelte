@@ -28,7 +28,7 @@
 	<h1 class="display page-title">History</h1>
 	{#if data.workouts.length > 0}
 		<button
-			class="btn quiet edit-toggle"
+			class="btn-sm label"
 			onclick={() => {
 				editing = !editing;
 				confirmingId = null;
@@ -88,19 +88,15 @@
 <style lang="scss">
 	.head {
 		display: flex;
-		align-items: baseline;
+		// center, not baseline: the action beside the title is a bordered box
+		// now, and baseline alignment hangs its border below the title's.
+		align-items: center;
 		justify-content: space-between;
 		margin-bottom: $space-4;
 	}
 
 	.page-title {
 		font-size: 30px;
-	}
-
-	.edit-toggle {
-		min-height: 36px;
-		padding: 0 $space-3;
-		font-size: 14px;
 	}
 
 	.hint {
