@@ -53,7 +53,9 @@
 		biceps: 'Biceps',
 		triceps: 'Triceps',
 		calves: 'Calves',
-		abs: 'Abs'
+		abs: 'Abs',
+		traps: 'Traps',
+		'lower back': 'Low back'
 	};
 
 	let q = $state('');
@@ -146,7 +148,7 @@
 				class="chip"
 				class:on={group === g}
 				aria-pressed={group === g}
-				onclick={() => (group = toggle(group, g))}>{GROUP_LABEL[g]}</button
+				onclick={() => (group = toggle(group, g))}>{GROUP_LABEL[g] ?? g}</button
 			>
 		{/each}
 	</div>
