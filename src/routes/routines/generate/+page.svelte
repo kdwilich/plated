@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { defaultSplitStyle, type Emphasis, type SplitStyle } from '$lib/training/generate';
+	import { isUnderTarget } from '$lib/training/volume';
 
 	let { data, form } = $props();
 
@@ -177,7 +178,7 @@
 				{#each Object.entries(form.volume) as [group, sets] (group)}
 					<li class="hairline-row preview-row">
 						<span class="preview-name">{group}</span>
-						<span class="num preview-rx" class:low={form.profile && sets < form.profile.weekly_sets_min}>{sets}</span>
+						<span class="num preview-rx" class:low={isUnderTarget(group, sets, form.profile?.weekly_sets_min)}>{sets}</span>
 					</li>
 				{/each}
 			</ul>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actualSetsByGroup, MAJOR_GROUPS, DISPLAY_GROUPS, type TrainedExercise } from './volume.ts';
+import { actualSetsByGroup, isUnderTarget, MAJOR_GROUPS, DISPLAY_GROUPS, type TrainedExercise } from './volume.ts';
 
 const trained = (o: Partial<TrainedExercise>): TrainedExercise => ({
 	primary_muscles: [],
@@ -118,4 +118,16 @@ test('the coverage contract does not demand a slot for traps or lower back', () 
 	assert.ok(!(MAJOR_GROUPS as readonly string[]).includes('lower back'));
 	assert.ok((DISPLAY_GROUPS as readonly string[]).includes('traps'));
 	assert.ok((DISPLAY_GROUPS as readonly string[]).includes('lower back'));
+});
+
+test('only groups with a target can fall short of it', () => {
+	// The volume table painted three sets of shrugs yellow, as if traps were
+	// deficient — while the generator neither chased traps nor warned about
+	// them. One of the two had to be wrong, and it was the table.
+	assert.equal(isUnderTarget('back', 9, 10), true);
+	assert.equal(isUnderTarget('back', 10, 10), false);
+	assert.equal(isUnderTarget('traps', 3, 10), false);
+	assert.equal(isUnderTarget('lower back', 3.5, 10), false);
+	// No profile, nothing to be short of.
+	assert.equal(isUnderTarget('back', 1, undefined), false);
 });

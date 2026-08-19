@@ -60,6 +60,24 @@ export const MAJOR_GROUPS = [
 export const DISPLAY_GROUPS = [...MAJOR_GROUPS, 'traps', 'lower back'] as const;
 
 /**
+ * Whether a group's weekly sets fall short of what the profile aims for.
+ *
+ * Only MAJOR_GROUPS have a target to fall short of. traps and lower back are
+ * scored and shown, but they are fed by rows, hinges and carries rather than
+ * by a slot of their own — flagging three sets of shrugs as a deficit invents
+ * a gap the generator deliberately does not chase and does not warn about.
+ */
+export function isUnderTarget(
+	group: string,
+	sets: number,
+	weeklySetsMin: number | undefined
+): boolean {
+	if (weeklySetsMin === undefined) return false;
+	if (!(MAJOR_GROUPS as readonly string[]).includes(group)) return false;
+	return sets < weeklySetsMin;
+}
+
+/**
  * One exercise's credit, applied once per group. A group is worth a full set
  * if any primary muscle lands there and half a set if only secondaries do —
  * never both, and never once per muscle.

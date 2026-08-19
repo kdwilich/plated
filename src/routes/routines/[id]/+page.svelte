@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
+	import { isUnderTarget } from '$lib/training/volume';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
 	let { data, form } = $props();
@@ -226,7 +227,7 @@
 			{#each Object.entries(data.volume) as [group, sets] (group)}
 				<li class="hairline-row volume-row">
 					<span class="volume-name">{group}</span>
-					<span class="num volume-sets" class:low={profile && sets < profile.weekly_sets_min}>{sets}</span>
+					<span class="num volume-sets" class:low={isUnderTarget(group, sets, profile?.weekly_sets_min)}>{sets}</span>
 				</li>
 			{/each}
 		</ul>
