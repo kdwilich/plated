@@ -216,6 +216,28 @@ function applyEmphasis(template: Template, emphasis: Emphasis): Template {
 }
 
 /**
+ * Priority order, adjusted for what the session already holds.
+ *
+ * The one adjustment so far: a hinge that follows a squat should be the one
+ * that trains hamstrings. Barbell Deadlift outranks Romanian Deadlift 100 to
+ * 96, so leg day led with a squat and followed it with the heaviest pull in
+ * the catalog — two maximal axial loads in one session, and still nothing
+ * hamstring-primary, because a conventional deadlift is `lower back` primary.
+ * Where the hinge is the session's only heavy compound, the deadlift keeps the
+ * slot.
+ */
+function rankCandidates(candidates: Exercise[], slot: Slot, session: SessionDraft): Exercise[] {
+	if (slot.pattern !== 'hip_hinge') return candidates;
+	const squats = session.exercises.some(
+		(pe) => pe.exercise.movement_pattern === 'squat' || pe.exercise.movement_pattern === 'lunge'
+	);
+	if (!squats) return candidates;
+	const hamstrings = candidates.filter((e) => primaryGroups(e).includes('hamstrings'));
+	if (hamstrings.length === 0) return candidates;
+	return [...hamstrings, ...candidates.filter((e) => !hamstrings.includes(e))];
+}
+
+/**
  * A filled slot, still carrying what the template knew about it. The kind and
  * region are gone from the draft itself — a PrescribedExercise is just an
  * exercise and a prescription — but de-emphasis and the volume pass both need
@@ -322,7 +344,7 @@ export function generate(input: GenerateInput): RoutineDraft {
 	for (const t of template) {
 		const session: SessionDraft = { name: t.name, exercises: [] };
 		for (const slot of t.slots) {
-			const candidates = byPattern.get(slot.pattern) ?? [];
+			const candidates = rankCandidates(byPattern.get(slot.pattern) ?? [], slot, session);
 			const pick =
 				candidates.find((e) => !usedIds.has(e.id)) ??
 				(slot.optional ? undefined : candidates[0]);

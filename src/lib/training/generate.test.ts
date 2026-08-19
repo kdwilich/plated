@@ -4,7 +4,7 @@ import { generate, defaultSplitStyle } from './generate.ts';
 import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup, actualSetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
 import { PROFILES } from './profiles.ts';
 import type { Exercise, MovementPattern } from './types.ts';
-import { forceCategory, type Force } from './filters.ts';
+import { forceCategory, primaryGroups, type Force } from './filters.ts';
 
 let n = 0;
 function ex(
@@ -503,6 +503,27 @@ test('emphasis never adds an exercise the session is not for', () => {
 						`${days}-day ${emphasis}: "${s.name}" holds ${pe.exercise.name}, which is ${f}`
 					);
 				}
+			}
+		}
+	}
+});
+
+test('a session that already squats gets a hamstring hinge, not a second max-effort pull', () => {
+	// Barbell Deadlift outranks Romanian Deadlift 100 to 96, so leg day led
+	// with a squat and followed it with the heaviest hinge in the catalog —
+	// two maximal axial loads in one session, and still nothing training the
+	// hamstrings directly, since a conventional deadlift is lower-back primary.
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			for (const s of draft.sessions) {
+				const patterns = s.exercises.map((e) => e.exercise.movement_pattern);
+				if (!patterns.includes('squat') || !patterns.includes('hip_hinge')) continue;
+				const hinge = s.exercises.find((e) => e.exercise.movement_pattern === 'hip_hinge')!;
+				assert.ok(
+					primaryGroups(hinge.exercise).includes('hamstrings'),
+					`${days}-day ${splitStyle} "${s.name}": squat is followed by ${hinge.exercise.name}, which trains ${primaryGroups(hinge.exercise).join('/')}`
+				);
 			}
 		}
 	}
