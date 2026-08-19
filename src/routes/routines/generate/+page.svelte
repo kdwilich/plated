@@ -154,9 +154,19 @@
 {#if form?.draft}
 	<section class="preview">
 		<h2 class="display preview-title">Draft</h2>
-		{#each form.draft.warnings as w (w)}
+		{#each form.structuralWarnings ?? [] as w (w)}
 			<p class="warning">{w}</p>
 		{/each}
+		{#if form.warnings?.length}
+			<details class="volume-warnings">
+				<summary>{form.warningSummary}</summary>
+				<ul>
+					{#each form.warnings as w (w.group)}
+						<li>{w.message}</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
 
 		{#each form.draft.sessions as s (s.name)}
 			<div class="card preview-session">
@@ -308,6 +318,33 @@
 		margin: $space-3 0;
 		font-size: 13px;
 		color: $signal;
+	}
+
+	.volume-warnings {
+		margin: $space-3 0;
+
+		summary {
+			font-size: 13px;
+			color: $signal;
+			cursor: pointer;
+			line-height: 1.45;
+		}
+
+		ul {
+			margin-top: $space-2;
+			padding-left: $space-4;
+			list-style: disc;
+		}
+
+		li {
+			font-size: 13px;
+			color: $signal;
+			line-height: 1.45;
+
+			+ li {
+				margin-top: $space-2;
+			}
+		}
 	}
 
 	.preview {

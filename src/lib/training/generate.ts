@@ -452,7 +452,7 @@ export function generate(input: GenerateInput): RoutineDraft {
 	// Both are worth saying out loud, and the routine page has to be able to say
 	// the same things about a routine you have since edited, so the judgement
 	// lives in volume.ts rather than here.
-	warnings.push(...volumeWarnings(draft, profile));
+	warnings.push(...volumeWarnings(draft, profile).map((w) => w.message));
 
 	return draft;
 }

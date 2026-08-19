@@ -238,11 +238,14 @@
 			</p>
 		{/if}
 		{#if data.warnings.length > 0}
-			<ul class="volume-warnings">
-				{#each data.warnings as w (w)}
-					<li>{w}</li>
-				{/each}
-			</ul>
+			<details class="volume-warnings">
+				<summary>{data.warningSummary}</summary>
+				<ul>
+					{#each data.warnings as w (w.group)}
+						<li>{w.message}</li>
+					{/each}
+				</ul>
+			</details>
 		{/if}
 	</div>
 {/if}
@@ -496,8 +499,19 @@
 
 	.volume-warnings {
 		margin-top: $space-3;
-		padding-left: $space-4;
-		list-style: disc;
+
+		summary {
+			font-size: 13px;
+			color: $signal;
+			cursor: pointer;
+			line-height: 1.45;
+		}
+
+		ul {
+			margin-top: $space-2;
+			padding-left: $space-4;
+			list-style: disc;
+		}
 
 		li {
 			font-size: 13px;

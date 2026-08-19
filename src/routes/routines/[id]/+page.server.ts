@@ -18,7 +18,7 @@ import {
 } from '$lib/server/routines';
 import { getExercise } from '$lib/server/catalog';
 import { PROFILES, prescriptionFor } from '$lib/training/profiles';
-import { volumeWarnings, weeklySetsByGroup } from '$lib/training/volume';
+import { volumeSummary, volumeWarnings, weeklySetsByGroup } from '$lib/training/volume';
 
 // `locals.user!` throughout: hooks.server.ts guarantees a user on every
 // non-public route, and none of these are public. A defensive branch here
@@ -34,11 +34,13 @@ export const load: PageServerLoad = async ({ params, platform, locals }) => {
 	// fixed it.
 	const draft = routineToDraft(routine);
 	const profile = PROFILES[routine.profile_key] ?? PROFILES.hypertrophy;
+	const warnings = volumeWarnings(draft, profile);
 	return {
 		routine,
 		profiles: Object.values(PROFILES),
 		volume: weeklySetsByGroup(draft),
-		warnings: volumeWarnings(draft, profile)
+		warnings,
+		warningSummary: volumeSummary(warnings, profile)
 	};
 };
 

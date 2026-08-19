@@ -4,6 +4,7 @@ import {
 	actualSetsByGroup,
 	isUnderTarget,
 	volumeWarnings,
+	volumeSummary,
 	MAJOR_GROUPS,
 	DISPLAY_GROUPS,
 	type TrainedExercise
@@ -175,18 +176,18 @@ const draftOf = (
 
 test('a group with no direct work at all is named', () => {
 	const w = volumeWarnings(draftOf([['chest', 12]]), PROFILES.hypertrophy);
-	assert.ok(w.some((x) => x.includes('Nothing in this routine trains quads')));
+	assert.ok(w.some((x) => x.message.includes('Nothing in this routine trains quads')));
 });
 
 test('a group with only indirect work says so, with the number', () => {
 	const w = volumeWarnings(draftOf([['chest', 12]], ['triceps']), PROFILES.hypertrophy);
-	assert.ok(w.some((x) => x.includes('triceps') && x.includes('indirect')));
+	assert.ok(w.some((x) => x.group === 'triceps' && x.kind === 'indirect'));
 });
 
 test('a group with direct work but under the minimum is named', () => {
 	const w = volumeWarnings(draftOf([['chest', 4]]), PROFILES.hypertrophy);
 	assert.ok(
-		w.some((x) => x.includes('chest gets 4 sets a week')),
+		w.some((x) => x.group === 'chest' && x.kind === 'under' && x.sets === 4),
 		`expected a chest shortfall, got ${JSON.stringify(w)}`
 	);
 });
@@ -194,19 +195,48 @@ test('a group with direct work but under the minimum is named', () => {
 test('a group over the top of the range is named too', () => {
 	const w = volumeWarnings(draftOf([['chest', 25]]), PROFILES.hypertrophy);
 	assert.ok(
-		w.some((x) => x.includes('chest gets 25 sets a week') && x.includes('over')),
+		w.some((x) => x.group === 'chest' && x.kind === 'over' && x.sets === 25),
 		`expected a chest overshoot, got ${JSON.stringify(w)}`
 	);
 });
 
 test('a group inside the range is not mentioned', () => {
 	const w = volumeWarnings(draftOf([['chest', 12]]), PROFILES.hypertrophy);
-	assert.ok(!w.some((x) => x.startsWith('chest gets')));
+	assert.ok(!w.some((x) => x.group === 'chest'));
 });
 
 test('traps and lower back are never reported as short', () => {
 	// They have no target, so they cannot fall below one.
 	const w = volumeWarnings(draftOf([['traps', 3]]), PROFILES.hypertrophy);
-	assert.ok(!w.some((x) => x.includes('traps gets')));
-	assert.ok(!w.some((x) => x.includes('lower back gets')));
+	assert.ok(!w.some((x) => x.group === 'traps'));
+	assert.ok(!w.some((x) => x.group === 'lower back'));
+});
+
+test('the summary counts the groups instead of repeating the sentence', () => {
+	// Eight near-identical warnings are honest and unreadable. The count is the
+	// part worth seeing first: it is a fact about the split, not about eight
+	// separate exercises you forgot.
+	const p = PROFILES.hypertrophy;
+	const short = volumeWarnings(draftOf([['chest', 4], ['back', 4]]), p);
+	assert.equal(volumeSummary(short, p), '10 muscle groups short of 10 sets a week.');
+
+	const one = volumeSummary([{ group: 'chest', kind: 'under', sets: 4, message: '' }], p);
+	assert.equal(one, '1 muscle group short of 10 sets a week.');
+
+	const over = volumeSummary([{ group: 'chest', kind: 'over', sets: 25, message: '' }], p);
+	assert.equal(over, '1 muscle group past 20 sets a week.');
+
+	const both = volumeSummary(
+		[
+			{ group: 'chest', kind: 'over', sets: 25, message: '' },
+			{ group: 'back', kind: 'under', sets: 4, message: '' },
+			{ group: 'abs', kind: 'none', sets: 0, message: '' }
+		],
+		p
+	);
+	assert.equal(both, '2 muscle groups short of 10 sets a week, 1 past 20.');
+});
+
+test('a routine inside the range has nothing to summarise', () => {
+	assert.equal(volumeSummary([], PROFILES.hypertrophy), null);
 });

@@ -138,8 +138,16 @@ export function weeklySetsByGroup(draft: RoutineDraft): Record<string, number> {
  *
  * Only MAJOR_GROUPS are judged — traps and lower back have no target to miss.
  */
-export function volumeWarnings(draft: RoutineDraft, profile: Profile): string[] {
-	const out: string[] = [];
+export interface VolumeWarning {
+	group: string;
+	/** `none` and `indirect` are both absences; `under`/`over` are amounts. */
+	kind: 'none' | 'indirect' | 'under' | 'over';
+	sets: number;
+	message: string;
+}
+
+export function volumeWarnings(draft: RoutineDraft, profile: Profile): VolumeWarning[] {
+	const out: VolumeWarning[] = [];
 	const volume = weeklySetsByGroup(draft);
 	const all = draft.sessions.flatMap((s) => s.exercises);
 
@@ -151,22 +159,53 @@ export function volumeWarnings(draft: RoutineDraft, profile: Profile): string[] 
 		);
 		const sets = volume[group] ?? 0;
 		if (!direct) {
-			out.push(
-				sets > 0
-					? `${group} only gets indirect work (${sets} sets). Add another ${group} exercise if you want it trained directly.`
-					: `Nothing in this routine trains ${group}.`
-			);
+			out.push({
+				group,
+				kind: sets > 0 ? 'indirect' : 'none',
+				sets,
+				message:
+					sets > 0
+						? `${group} only gets indirect work (${sets} sets). Add another ${group} exercise if you want it trained directly.`
+						: `Nothing in this routine trains ${group}.`
+			});
 		} else if (sets < profile.weekly_sets_min) {
-			out.push(
-				`${group} gets ${sets} sets a week, under the ${profile.weekly_sets_min} this profile aims for. Add another ${group} exercise or another training day.`
-			);
+			out.push({
+				group,
+				kind: 'under',
+				sets,
+				message: `${group} gets ${sets} sets a week, under the ${profile.weekly_sets_min} this profile aims for. Add another ${group} exercise or another training day.`
+			});
 		} else if (sets > profile.weekly_sets_max) {
-			out.push(
-				`${group} gets ${sets} sets a week, over the ${profile.weekly_sets_max} this profile tops out at. Drop a ${group} exercise if the sessions feel long.`
-			);
+			out.push({
+				group,
+				kind: 'over',
+				sets,
+				message: `${group} gets ${sets} sets a week, over the ${profile.weekly_sets_max} this profile tops out at. Drop a ${group} exercise if the sessions feel long.`
+			});
 		}
 	}
 	return out;
+}
+
+/**
+ * One line standing in for the list.
+ *
+ * Eight near-identical sentences are honest and unreadable: the eye slides off
+ * a wall of yellow, and the one that matters is indistinguishable from the
+ * seven that follow the same template. The count is the part worth seeing
+ * first — eight groups short is a fact about the *split*, not about eight
+ * separate exercises you forgot.
+ */
+export function volumeSummary(warnings: VolumeWarning[], profile: Profile): string | null {
+	if (warnings.length === 0) return null;
+	const short = warnings.filter((w) => w.kind !== 'over').length;
+	const over = warnings.length - short;
+	const groups = (n: number) => `${n} muscle ${n === 1 ? 'group' : 'groups'}`;
+	if (short > 0 && over > 0) {
+		return `${groups(short)} short of ${profile.weekly_sets_min} sets a week, ${over} past ${profile.weekly_sets_max}.`;
+	}
+	if (short > 0) return `${groups(short)} short of ${profile.weekly_sets_min} sets a week.`;
+	return `${groups(over)} past ${profile.weekly_sets_max} sets a week.`;
 }
 
 /** One exercise's contribution to a window of real training. */
