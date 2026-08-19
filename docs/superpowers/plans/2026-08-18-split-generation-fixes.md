@@ -6,6 +6,8 @@
 
 **Architecture:** Everything here lives in the pure training core (`src/lib/training/`), which runs under `node --test` with no database. Task 1–2 fix *accounting*: what a set is worth and what a muscle group is. Tasks 3–7 fix *decisions*: which exercise a slot gets, which slot emphasis cuts, and how extra sets are distributed. The order matters — Tasks 3–7 all assert on numbers that Tasks 1–2 change, so writing them first would mean writing them twice.
 
+**Status:** Tasks 1-7 landed on `fix/volume-accounting` (commits `90eca3e`, `ca0b1a9`, `b272f26`, `72216b6`, `5bbcd3e`, `5dbf4ea`). Tasks 6 and 7 shipped together — lowering the per-exercise caps changed which groups fall short, so the shortfall warning had to land in the same commit to keep the suite green. Task 8 is open.
+
 **Tech Stack:** SvelteKit 2, Svelte 5 runes, Cloudflare Workers + D1, `node --test` with TypeScript strip-only mode.
 
 **Origin:** Reproduced from a real generated routine — 3 days / targeted / hypertrophy / emphasis `upper` — which shipped a 29-set push day, biceps curls on push, lateral raises on pull, and zero hamstring-primary work. Two independent LLM reviews of that routine each identified real defects; every one traced to code, not to taste.
@@ -20,7 +22,7 @@ Read these before Task 1. They are the things that have already cost time on thi
 2. **Work on the `fix/volume-accounting` branch.** Pushing `main` deploys to production automatically.
 3. **Never run `npm run deploy`.** Deployment happens by pushing `main`.
 4. **`git add -A` has swept the wrong files into a commit on this repo before.** Stage explicit paths.
-5. **Baseline before this work: 122 training + 85 server + 8 client = 215 passing.** `npm test` runs all three.
+5. **Baseline before this work: 122 training + 85 server + 8 client = 215 passing. After Tasks 1-7: 137 + 85 + 8 = 230.** `npm test` runs all three.
 6. **Node runs TypeScript in strip-only mode.** No `$lib` imports in anything under test — use relative paths with explicit `.ts` extensions.
 7. **The unit-test catalog in `generate.test.ts` is kinder than reality.** Its `hip_hinge` entries are `hamstrings`-primary; the real catalog's top hinge is Barbell Deadlift, which is `lower back`-primary. This single divergence is why the suite never caught Task 4 and Task 5. When a task says "assert against the real shape", it means: make the fixture match the real catalog, then fix the code.
 
