@@ -48,6 +48,38 @@ export const MAJOR_GROUPS = [
 ] as const;
 
 /**
+ * One exercise's credit, applied once per group. A group is worth a full set
+ * if any primary muscle lands there and half a set if only secondaries do —
+ * never both, and never once per muscle.
+ *
+ * Paying per muscle looked harmless until you notice how many of the dataset's
+ * muscles share a group. A deadlift is `lower back` primary with `lats`,
+ * `middle back` and `traps` secondary: four muscles, one group, 2.5× credit
+ * per set. Every row paid 1.5×, every curl paid 1.5× on `forearms`. Back could
+ * not help but look covered.
+ */
+function creditExercise(
+	out: Record<string, number>,
+	primary: string[],
+	secondary: string[],
+	sets: number
+): void {
+	const primaryGroups = new Set<string>();
+	for (const m of primary) {
+		const g = muscleGroup(m);
+		if (g) primaryGroups.add(g);
+	}
+	for (const g of primaryGroups) out[g] = (out[g] ?? 0) + sets;
+
+	const secondaryGroups = new Set<string>();
+	for (const m of secondary) {
+		const g = muscleGroup(m);
+		if (g && !primaryGroups.has(g)) secondaryGroups.add(g);
+	}
+	for (const g of secondaryGroups) out[g] = (out[g] ?? 0) + sets * 0.5;
+}
+
+/**
  * Weekly sets per muscle group across a full pass of the rotation.
  * Primary muscles count full; secondaries count half — a bench press is
  * real triceps work and pretending otherwise misleads the volume table.
@@ -58,14 +90,7 @@ export function weeklySetsByGroup(draft: RoutineDraft): Record<string, number> {
 		for (const { exercise, target_sets } of session.exercises) {
 			// Cardio and unpatterned oddities never count toward volume.
 			if (!exercise.movement_pattern) continue;
-			for (const m of exercise.primary_muscles) {
-				const g = muscleGroup(m);
-				if (g) out[g] = (out[g] ?? 0) + target_sets;
-			}
-			for (const m of exercise.secondary_muscles) {
-				const g = muscleGroup(m);
-				if (g) out[g] = (out[g] ?? 0) + target_sets * 0.5;
-			}
+			creditExercise(out, exercise.primary_muscles, exercise.secondary_muscles, target_sets);
 		}
 	}
 	for (const g of Object.keys(out)) out[g] = Math.round(out[g] * 2) / 2;
@@ -90,14 +115,7 @@ export function actualSetsByGroup(trained: TrainedExercise[]): Record<string, nu
 	const out: Record<string, number> = {};
 	for (const t of trained) {
 		if (!t.movement_pattern) continue;
-		for (const m of t.primary_muscles) {
-			const g = muscleGroup(m);
-			if (g) out[g] = (out[g] ?? 0) + t.sets;
-		}
-		for (const m of t.secondary_muscles) {
-			const g = muscleGroup(m);
-			if (g) out[g] = (out[g] ?? 0) + t.sets * 0.5;
-		}
+		creditExercise(out, t.primary_muscles, t.secondary_muscles, t.sets);
 	}
 	for (const g of Object.keys(out)) out[g] = Math.round(out[g] * 2) / 2;
 	return out;

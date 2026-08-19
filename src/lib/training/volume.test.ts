@@ -57,3 +57,41 @@ test('an unmapped muscle is skipped rather than becoming its own group', () => {
 test('nothing trained is an empty table', () => {
 	assert.deepEqual(actualSetsByGroup([]), {});
 });
+
+test('one exercise credits a group once, however many of its muscles land there', () => {
+	// Barbell Deadlift's real tagging: lower back primary, with lats, middle
+	// back and traps secondary. All four collapse to `back`, and the old
+	// scoring paid for each one — 7.5 sets of "back" from three sets of
+	// deadlifts, which is why back always read as covered.
+	const vol = actualSetsByGroup([
+		trained({
+			primary_muscles: ['lower back'],
+			secondary_muscles: ['lats', 'middle back', 'traps', 'hamstrings'],
+			movement_pattern: 'hip_hinge',
+			sets: 3
+		})
+	]);
+	assert.equal(vol.back, 3);
+	assert.equal(vol.hamstrings, 1.5);
+});
+
+test('a primary hit is not topped up by a secondary in the same group', () => {
+	// Every curl in the catalog is biceps-primary with forearms secondary, and
+	// forearms map to biceps. Full credit already covers it.
+	const vol = actualSetsByGroup([
+		trained({
+			primary_muscles: ['biceps'],
+			secondary_muscles: ['forearms'],
+			movement_pattern: 'biceps_curl',
+			sets: 4
+		})
+	]);
+	assert.equal(vol.biceps, 4);
+});
+
+test('two secondaries in one group still pay only once', () => {
+	const vol = actualSetsByGroup([
+		trained({ primary_muscles: ['chest'], secondary_muscles: ['lats', 'traps'], sets: 4 })
+	]);
+	assert.equal(vol.back, 2);
+});

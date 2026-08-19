@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generate, defaultSplitStyle } from './generate.ts';
-import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
+import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup, actualSetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
 import { PROFILES } from './profiles.ts';
 import type { Exercise, MovementPattern } from './types.ts';
 
@@ -405,4 +405,22 @@ test('rotation is cyclic and starts at the top', () => {
 	assert.equal(nextPosition(4, null), 0);
 	assert.equal(nextPosition(4, 0), 1);
 	assert.equal(nextPosition(4, 3), 0);
+});
+
+test('the plan and the log score an exercise identically', () => {
+	// weeklySetsByGroup and actualSetsByGroup must never drift: the stats page
+	// shows them side by side and calls the difference under-training.
+	const draft = generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', catalog: catalog() });
+	const planned = weeklySetsByGroup(draft);
+	const logged = actualSetsByGroup(
+		draft.sessions.flatMap((s) =>
+			s.exercises.map((pe) => ({
+				primary_muscles: pe.exercise.primary_muscles,
+				secondary_muscles: pe.exercise.secondary_muscles,
+				movement_pattern: pe.exercise.movement_pattern,
+				sets: pe.target_sets
+			}))
+		)
+	);
+	assert.deepEqual(planned, logged);
 });
