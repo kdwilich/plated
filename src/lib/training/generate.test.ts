@@ -36,7 +36,13 @@ function catalog(): Exercise[] {
 	return [
 		ex('squat', 'barbell', ['quadriceps'], 100, ['glutes', 'hamstrings']),
 		ex('squat', 'machine', ['quadriceps'], 80, ['glutes']),
-		ex('hip_hinge', 'barbell', ['hamstrings'], 100, ['glutes', 'lower back']),
+		// The top hinge is a conventional deadlift: `lower back` primary, with
+		// hamstrings only secondary. This matches the real catalog, where
+		// Barbell Deadlift outranks Romanian Deadlift 100 to 96 — and it is the
+		// divergence that let the hamstrings bug hide, because a fixture whose
+		// every hinge was hamstrings-primary could never reproduce it.
+		ex('hip_hinge', 'barbell', ['lower back'], 100, ['glutes', 'hamstrings', 'lats', 'traps']),
+		ex('hip_hinge', 'barbell', ['hamstrings'], 96, ['glutes', 'lower back']),
 		ex('hip_hinge', 'machine', ['hamstrings'], 60, ['glutes']),
 		ex('horizontal_press', 'barbell', ['chest'], 100, ['triceps', 'shoulders']),
 		ex('horizontal_press', 'machine', ['chest'], 70, ['triceps']),
@@ -126,12 +132,20 @@ const directGroups = (draft: { sessions: { exercises: { exercise: Exercise }[] }
 };
 
 test('every major muscle group gets direct work from 3 days up, in both styles', () => {
+	// Every emphasis, not just balanced. This test only ever ran the default
+	// before, which is why de-emphasis could delete the last hamstring slot in
+	// six different configurations without anything going red.
 	for (const days of [3, 4, 5, 6] as const) {
 		for (const splitStyle of ['full_body', 'targeted'] as const) {
-			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
-			const covered = directGroups(draft);
-			for (const group of MAJOR_GROUPS) {
-				assert.ok(covered.has(group), `${group} has no direct work in a ${days}-day ${splitStyle} split`);
+			for (const emphasis of ['balanced', 'lower', 'upper'] as const) {
+				const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis, catalog: catalog() });
+				const covered = directGroups(draft);
+				for (const group of MAJOR_GROUPS) {
+					assert.ok(
+						covered.has(group),
+						`${group} has no direct work in a ${days}-day ${splitStyle} split with ${emphasis} emphasis`
+					);
+				}
 			}
 		}
 	}
@@ -211,7 +225,11 @@ test('volume pass: a below-minimum group means all its direct exercises hit the 
 	const draft = generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', catalog: catalog() });
 	const vol = weeklySetsByGroup(draft);
 	const all = draft.sessions.flatMap((s) => s.exercises);
+	const owed = new Set<string>(MAJOR_GROUPS);
 	for (const [group, sets] of Object.entries(vol)) {
+		// traps and lower back have no weekly target to fall short of — the
+		// volume pass deliberately leaves them to what rows and hinges give.
+		if (!owed.has(group)) continue;
 		if (sets >= profile.weekly_sets_min) continue;
 		const direct = all.filter((pe) =>
 			pe.exercise.primary_muscles.some((m) => muscleGroup(m) === group)

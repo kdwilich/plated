@@ -2,10 +2,16 @@
 // filled from the catalog by priority, filtered to the gym's equipment.
 // Deterministic, no cleverness. The output is a draft for the editor.
 
-import type { Exercise, MovementPattern, RoutineDraft, SessionDraft } from './types.ts';
+import type {
+	Exercise,
+	MovementPattern,
+	PrescribedExercise,
+	RoutineDraft,
+	SessionDraft
+} from './types.ts';
 import { PROFILES } from './profiles.ts';
 import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup } from './volume.ts';
-import type { Force } from './filters.ts';
+import { primaryGroups, type Force } from './filters.ts';
 
 export type SplitStyle = 'full_body' | 'targeted';
 export type Emphasis = 'balanced' | 'lower' | 'upper';
@@ -182,37 +188,9 @@ const PATTERN_GROUP: Record<MovementPattern, string> = {
 
 function applyEmphasis(template: Template, emphasis: Emphasis): Template {
 	if (emphasis === 'balanced') return template;
-	const opposite = emphasis === 'lower' ? 'upper' : 'lower';
-
-	// Direct slots per group across the whole week, decremented as we cut.
-	const weekCount = new Map<string, number>();
-	for (const t of template) {
-		for (const s of t.slots) {
-			const g = PATTERN_GROUP[s.pattern];
-			weekCount.set(g, (weekCount.get(g) ?? 0) + 1);
-		}
-	}
 
 	return template.map((t, n) => {
 		const slots = [...t.slots];
-
-		// Drop one isolation of the de-emphasized region — choosing the one
-		// whose muscle keeps the most direct work elsewhere in the week.
-		let cut = -1;
-		let cutCount = -1;
-		for (let j = 0; j < slots.length; j++) {
-			if (slots[j].kind !== 'isolation' || slotRegion(slots[j].pattern) !== opposite) continue;
-			const remaining = weekCount.get(PATTERN_GROUP[slots[j].pattern]) ?? 0;
-			if (remaining > cutCount) {
-				cutCount = remaining;
-				cut = j;
-			}
-		}
-		if (cut >= 0) {
-			const g = PATTERN_GROUP[slots[cut].pattern];
-			weekCount.set(g, (weekCount.get(g) ?? 0) - 1);
-			slots.splice(cut, 1);
-		}
 
 		// Add an emphasized slot the session doesn't already have, drawn only
 		// from the forces this session is actually for. A pull day gains pull
@@ -235,6 +213,69 @@ function applyEmphasis(template: Template, emphasis: Emphasis): Template {
 
 		return { name: t.name, forces: t.forces, slots };
 	});
+}
+
+/**
+ * A filled slot, still carrying what the template knew about it. The kind and
+ * region are gone from the draft itself — a PrescribedExercise is just an
+ * exercise and a prescription — but de-emphasis and the volume pass both need
+ * to tell a compound from an accessory.
+ */
+interface Picked {
+	session: SessionDraft;
+	pe: PrescribedExercise;
+	kind: 'compound' | 'isolation';
+	region: 'lower' | 'upper' | 'core';
+}
+
+/**
+ * De-emphasis: drop one accessory per session from the region you asked for
+ * less of. Compounds are never touched — de-emphasis means maintenance, not
+ * neglect — and neither is the last direct exercise a muscle group has.
+ *
+ * This runs on picked exercises rather than on template slots, because a slot
+ * does not know what it will become. The old pass cut against a static
+ * pattern→group map claiming `hip_hinge` meant hamstrings; the catalog's
+ * top-priority hinge is a conventional deadlift, which is `lower back`
+ * primary. So it removed leg curls believing the hinge still covered
+ * hamstrings, and six configurations shipped with no hamstring work at all.
+ */
+function trimDeEmphasized(picked: Picked[], emphasis: Emphasis): Picked[] {
+	if (emphasis === 'balanced') return picked;
+	const opposite = emphasis === 'lower' ? 'upper' : 'lower';
+	const owed = new Set<string>(MAJOR_GROUPS);
+
+	// Direct exercises per group, from what was actually picked.
+	const direct = new Map<string, number>();
+	for (const p of picked) {
+		for (const g of primaryGroups(p.pe.exercise)) direct.set(g, (direct.get(g) ?? 0) + 1);
+	}
+
+	const dropped = new Set<PrescribedExercise>();
+	for (const session of [...new Set(picked.map((p) => p.session))]) {
+		let best: Picked | null = null;
+		let bestRedundancy = -1;
+		for (const p of picked) {
+			if (p.session !== session || p.kind !== 'isolation' || p.region !== opposite) continue;
+			const groups = primaryGroups(p.pe.exercise);
+			if (groups.length === 0) continue;
+			// Cutting may not take a group the routine owes direct work down to
+			// zero, however redundant the rest of the week looks.
+			if (!groups.every((g) => !owed.has(g) || (direct.get(g) ?? 0) > 1)) continue;
+			const redundancy = Math.min(...groups.map((g) => direct.get(g) ?? 0));
+			if (redundancy > bestRedundancy) {
+				bestRedundancy = redundancy;
+				best = p;
+			}
+		}
+		if (!best) continue;
+		for (const g of primaryGroups(best.pe.exercise)) direct.set(g, (direct.get(g) ?? 0) - 1);
+		const i = session.exercises.indexOf(best.pe);
+		if (i >= 0) session.exercises.splice(i, 1);
+		dropped.add(best.pe);
+	}
+
+	return picked.filter((p) => !dropped.has(p.pe));
 }
 
 export interface GenerateInput {
@@ -277,6 +318,7 @@ export function generate(input: GenerateInput): RoutineDraft {
 	for (const list of byPattern.values()) list.sort((a, b) => b.priority - a.priority);
 
 	const sessions: SessionDraft[] = [];
+	let picked: Picked[] = [];
 	for (const t of template) {
 		const session: SessionDraft = { name: t.name, exercises: [] };
 		for (const slot of t.slots) {
@@ -292,16 +334,20 @@ export function generate(input: GenerateInput): RoutineDraft {
 			}
 			usedIds.add(pick.id);
 			const rx = profile[slot.kind];
-			session.exercises.push({
+			const pe = {
 				exercise: pick,
 				target_sets: rx.sets,
 				rep_min: rx.rep_min,
 				rep_max: rx.rep_max,
 				rir_target: profile.rir
-			});
+			};
+			session.exercises.push(pe);
+			picked.push({ session, pe, kind: slot.kind, region: slotRegion(slot.pattern) });
 		}
 		sessions.push(session);
 	}
+
+	picked = trimDeEmphasized(picked, emphasis);
 
 	const draft: RoutineDraft = { profile_key: profile.key, sessions, warnings };
 
@@ -321,7 +367,7 @@ export function generate(input: GenerateInput): RoutineDraft {
 	};
 
 	const cap = Math.max(profile.compound.sets, profile.isolation.sets) + 2;
-	const all = draft.sessions.flatMap((s) => s.exercises);
+	const all = picked.map((p) => p.pe);
 	// Only the groups a routine owes direct work to get chased. traps and
 	// lower back are scored and displayed but sit outside MAJOR_GROUPS,
 	// because rows, hinges and carries feed them without a slot of their own —
