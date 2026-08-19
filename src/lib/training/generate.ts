@@ -5,6 +5,7 @@
 import type { Exercise, MovementPattern, RoutineDraft, SessionDraft } from './types.ts';
 import { PROFILES } from './profiles.ts';
 import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup } from './volume.ts';
+import type { Force } from './filters.ts';
 
 export type SplitStyle = 'full_body' | 'targeted';
 export type Emphasis = 'balanced' | 'lower' | 'upper';
@@ -15,7 +16,13 @@ interface Slot {
 	optional?: boolean;
 }
 
-type Template = { name: string; slots: Slot[] }[];
+/**
+ * `forces` is what the session is *for* — the thing that makes a session named
+ * "Pull" mean something. Absent means unconstrained, which is the honest answer
+ * for a full body day. Emphasis reads it before adding anything, because
+ * without it "upper" was broad enough to justify a curl on push day.
+ */
+type Template = { name: string; forces?: Force[]; slots: Slot[] }[];
 
 const c = (pattern: MovementPattern): Slot => ({ pattern, kind: 'compound' });
 const iso = (pattern: MovementPattern): Slot => ({ pattern, kind: 'isolation' });
@@ -61,36 +68,36 @@ function fullBody(days: number): Template {
 
 // Targeted: each session owns a region. Fewer exercises per muscle per
 // session, at the cost of training each muscle less often.
-const PUSH_A = { name: 'Push', slots: [c('horizontal_press'), c('vertical_press'), c('incline_press'), iso('chest_fly'), iso('lateral_raise'), iso('triceps_extension')] };
-const PULL_A = { name: 'Pull', slots: [c('vertical_pull'), c('horizontal_pull'), iso('rear_delt'), iso('biceps_curl'), opt(iso('shrug'))] };
-const LEGS_A = { name: 'Legs', slots: [c('squat'), c('hip_hinge'), c('hip_thrust'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] };
+const PUSH_A = { name: 'Push', forces: ['push'] as Force[], slots: [c('horizontal_press'), c('vertical_press'), c('incline_press'), iso('chest_fly'), iso('lateral_raise'), iso('triceps_extension')] };
+const PULL_A = { name: 'Pull', forces: ['pull'] as Force[], slots: [c('vertical_pull'), c('horizontal_pull'), iso('rear_delt'), iso('biceps_curl'), opt(iso('shrug'))] };
+const LEGS_A = { name: 'Legs', forces: ['legs'] as Force[], slots: [c('squat'), c('hip_hinge'), c('hip_thrust'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] };
 
 const TARGETED: Record<number, Template> = {
 	2: [
-		{ name: 'Upper', slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), iso('lateral_raise'), iso('biceps_curl'), iso('triceps_extension')] },
-		{ name: 'Lower', slots: [c('squat'), c('hip_hinge'), c('hip_thrust'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] }
+		{ name: 'Upper', forces: ['push', 'pull'] as Force[], slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), iso('lateral_raise'), iso('biceps_curl'), iso('triceps_extension')] },
+		{ name: 'Lower', forces: ['legs'] as Force[], slots: [c('squat'), c('hip_hinge'), c('hip_thrust'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] }
 	],
 	3: [PUSH_A, PULL_A, LEGS_A],
 	4: [
-		{ name: 'Upper A', slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), iso('biceps_curl'), iso('triceps_extension')] },
-		{ name: 'Lower A', slots: [c('squat'), iso('leg_curl'), c('hip_thrust'), iso('calf_raise'), iso('ab_flexion')] },
-		{ name: 'Upper B', slots: [c('incline_press'), c('horizontal_pull'), iso('lateral_raise'), iso('chest_fly'), iso('rear_delt'), iso('biceps_curl')] },
-		{ name: 'Lower B', slots: [c('hip_hinge'), c('lunge'), iso('leg_extension'), iso('calf_raise'), iso('ab_flexion')] }
+		{ name: 'Upper A', forces: ['push', 'pull'] as Force[], slots: [c('horizontal_press'), c('horizontal_pull'), c('vertical_press'), c('vertical_pull'), iso('biceps_curl'), iso('triceps_extension')] },
+		{ name: 'Lower A', forces: ['legs'] as Force[], slots: [c('squat'), iso('leg_curl'), c('hip_thrust'), iso('calf_raise'), iso('ab_flexion')] },
+		{ name: 'Upper B', forces: ['push', 'pull'] as Force[], slots: [c('incline_press'), c('horizontal_pull'), iso('lateral_raise'), iso('chest_fly'), iso('rear_delt'), iso('biceps_curl')] },
+		{ name: 'Lower B', forces: ['legs'] as Force[], slots: [c('hip_hinge'), c('lunge'), iso('leg_extension'), iso('calf_raise'), iso('ab_flexion')] }
 	],
 	5: [
 		PUSH_A,
 		PULL_A,
 		LEGS_A,
-		{ name: 'Upper', slots: [c('incline_press'), c('horizontal_pull'), c('vertical_pull'), iso('lateral_raise'), iso('rear_delt'), iso('biceps_curl')] },
-		{ name: 'Lower', slots: [c('hip_thrust'), iso('leg_extension'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] }
+		{ name: 'Upper', forces: ['push', 'pull'] as Force[], slots: [c('incline_press'), c('horizontal_pull'), c('vertical_pull'), iso('lateral_raise'), iso('rear_delt'), iso('biceps_curl')] },
+		{ name: 'Lower', forces: ['legs'] as Force[], slots: [c('hip_thrust'), iso('leg_extension'), iso('leg_curl'), iso('calf_raise'), iso('ab_flexion')] }
 	],
 	6: [
-		{ name: 'Push A', slots: [c('horizontal_press'), c('vertical_press'), iso('chest_fly'), iso('triceps_extension'), iso('lateral_raise')] },
-		{ name: 'Pull A', slots: [c('vertical_pull'), c('horizontal_pull'), iso('rear_delt'), iso('biceps_curl'), opt(iso('shrug'))] },
-		{ name: 'Legs A', slots: [c('squat'), iso('leg_curl'), c('lunge'), iso('calf_raise'), iso('ab_flexion')] },
-		{ name: 'Push B', slots: [c('vertical_press'), c('incline_press'), iso('chest_fly'), iso('triceps_extension'), iso('lateral_raise')] },
-		{ name: 'Pull B', slots: [c('horizontal_pull'), c('vertical_pull'), opt(iso('pullover')), iso('biceps_curl'), iso('rear_delt')] },
-		{ name: 'Legs B', slots: [c('hip_hinge'), iso('leg_extension'), c('hip_thrust'), iso('calf_raise'), iso('ab_flexion')] }
+		{ name: 'Push A', forces: ['push'] as Force[], slots: [c('horizontal_press'), c('vertical_press'), iso('chest_fly'), iso('triceps_extension'), iso('lateral_raise')] },
+		{ name: 'Pull A', forces: ['pull'] as Force[], slots: [c('vertical_pull'), c('horizontal_pull'), iso('rear_delt'), iso('biceps_curl'), opt(iso('shrug'))] },
+		{ name: 'Legs A', forces: ['legs'] as Force[], slots: [c('squat'), iso('leg_curl'), c('lunge'), iso('calf_raise'), iso('ab_flexion')] },
+		{ name: 'Push B', forces: ['push'] as Force[], slots: [c('vertical_press'), c('incline_press'), iso('chest_fly'), iso('triceps_extension'), iso('lateral_raise')] },
+		{ name: 'Pull B', forces: ['pull'] as Force[], slots: [c('horizontal_pull'), c('vertical_pull'), opt(iso('pullover')), iso('biceps_curl'), iso('rear_delt')] },
+		{ name: 'Legs B', forces: ['legs'] as Force[], slots: [c('hip_hinge'), iso('leg_extension'), c('hip_thrust'), iso('calf_raise'), iso('ab_flexion')] }
 	]
 };
 
@@ -129,12 +136,21 @@ function slotRegion(pattern: MovementPattern): 'lower' | 'upper' | 'core' {
 export const LOWER_GROUPS = new Set(['quads', 'hamstrings', 'glutes', 'calves']);
 export const UPPER_GROUPS = new Set(['chest', 'back', 'shoulders', 'biceps', 'triceps']);
 
-const LOWER_EXTRAS: Slot[] = [
-	c('hip_thrust'), iso('leg_curl'), iso('leg_extension'), c('lunge'), iso('calf_raise')
-];
-const UPPER_EXTRAS: Slot[] = [
-	iso('chest_fly'), iso('lateral_raise'), iso('biceps_curl'), iso('triceps_extension'), iso('rear_delt')
-];
+// What emphasis may add, keyed by the force it belongs to rather than by
+// region. "Upper" covers both halves of a push/pull split, which is exactly
+// why a region-keyed pool put a curl on push day: biceps are upper, and that
+// was the only question being asked.
+const EXTRAS_BY_FORCE: Record<Force, Slot[]> = {
+	push: [iso('chest_fly'), iso('lateral_raise'), iso('triceps_extension'), c('incline_press')],
+	pull: [iso('biceps_curl'), iso('rear_delt'), c('horizontal_pull'), iso('shrug')],
+	legs: [c('hip_thrust'), iso('leg_curl'), iso('leg_extension'), c('lunge'), iso('calf_raise')],
+	core: []
+};
+
+const EMPHASIS_FORCES: Record<Exclude<Emphasis, 'balanced'>, Force[]> = {
+	upper: ['push', 'pull'],
+	lower: ['legs']
+};
 
 // Which muscle group a slot is direct work FOR, so de-emphasis can cut the
 // accessory whose muscle keeps direct work elsewhere in the week, instead of
@@ -166,7 +182,6 @@ const PATTERN_GROUP: Record<MovementPattern, string> = {
 
 function applyEmphasis(template: Template, emphasis: Emphasis): Template {
 	if (emphasis === 'balanced') return template;
-	const extras = emphasis === 'lower' ? LOWER_EXTRAS : UPPER_EXTRAS;
 	const opposite = emphasis === 'lower' ? 'upper' : 'lower';
 
 	// Direct slots per group across the whole week, decremented as we cut.
@@ -199,11 +214,15 @@ function applyEmphasis(template: Template, emphasis: Emphasis): Template {
 			slots.splice(cut, 1);
 		}
 
-		// Add an emphasized slot the session doesn't already have — but only to
-		// sessions that train the region at all, so a targeted split's pull day
-		// doesn't sprout a leg press.
-		const trainsRegion = slots.some((s) => slotRegion(s.pattern) === emphasis);
-		if (trainsRegion) {
+		// Add an emphasized slot the session doesn't already have, drawn only
+		// from the forces this session is actually for. A pull day gains pull
+		// work or nothing — never a lateral raise next to the face pull that
+		// already covers its rear delts, and never a leg press.
+		const allowed = t.forces ?? (['push', 'pull', 'legs'] as Force[]);
+		const extras = EMPHASIS_FORCES[emphasis]
+			.filter((f) => allowed.includes(f))
+			.flatMap((f) => EXTRAS_BY_FORCE[f]);
+		if (extras.length > 0) {
 			const present = new Set(slots.map((s) => s.pattern));
 			for (let k = 0; k < extras.length; k++) {
 				const candidate = extras[(n + k) % extras.length];
@@ -214,7 +233,7 @@ function applyEmphasis(template: Template, emphasis: Emphasis): Template {
 			}
 		}
 
-		return { name: t.name, slots };
+		return { name: t.name, forces: t.forces, slots };
 	});
 }
 

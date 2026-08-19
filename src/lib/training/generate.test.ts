@@ -4,6 +4,7 @@ import { generate, defaultSplitStyle } from './generate.ts';
 import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup, actualSetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
 import { PROFILES } from './profiles.ts';
 import type { Exercise, MovementPattern } from './types.ts';
+import { forceCategory, type Force } from './filters.ts';
 
 let n = 0;
 function ex(
@@ -453,5 +454,38 @@ test('the volume pass chases targets only for groups the routine owes work to', 
 			profile.isolation.sets,
 			`${pe.exercise.name} trains only ${groups.join('/')} but was topped up to ${pe.target_sets} sets`
 		);
+	}
+});
+
+// Which forces a targeted session is allowed to contain, read off its own
+// name. Core work is exempt: abs belong wherever they fit.
+const allowedForces = (name: string): Force[] | null => {
+	if (/^push/i.test(name)) return ['push'];
+	if (/^pull/i.test(name)) return ['pull'];
+	if (/^(legs|lower)/i.test(name)) return ['legs'];
+	if (/^upper/i.test(name)) return ['push', 'pull'];
+	return null; // full body trains everything by construction
+};
+
+test('emphasis never adds an exercise the session is not for', () => {
+	// The regression: "upper" emphasis put a barbell curl on push day and a
+	// lateral raise on pull day, next to the face pull already covering rear
+	// delts. slotRegion only knew upper/lower/core, so both looked upper.
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const emphasis of ['balanced', 'lower', 'upper'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', emphasis, catalog: catalog() });
+			for (const s of draft.sessions) {
+				const allowed = allowedForces(s.name);
+				if (!allowed) continue;
+				for (const pe of s.exercises) {
+					const f = forceCategory(pe.exercise);
+					if (f === 'core' || f === null) continue;
+					assert.ok(
+						allowed.includes(f),
+						`${days}-day ${emphasis}: "${s.name}" holds ${pe.exercise.name}, which is ${f}`
+					);
+				}
+			}
+		}
 	}
 });
