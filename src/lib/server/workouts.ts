@@ -209,7 +209,7 @@ export async function workoutDetail(db: D1Database, userId: number, id: string) 
 			.bind(id, userId),
 		db
 			.prepare(
-				`SELECT ws.*, e.name AS exercise_name, e.measurement FROM workout_set ws
+				`SELECT ws.*, e.name AS exercise_name, e.measurement, e.equipment FROM workout_set ws
 				 JOIN exercise e ON e.id = ws.exercise_id
 				 JOIN workout w ON w.id = ws.workout_id
 				 WHERE ws.workout_id = ? AND w.user_id = ? ORDER BY ws.position`

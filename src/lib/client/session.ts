@@ -127,7 +127,7 @@ function structuredCloneSafe<T>(v: T): T {
 	return JSON.parse(JSON.stringify(v)) as T;
 }
 
-interface OutboxEntry {
+export interface OutboxEntry {
 	workout: {
 		id: string;
 		routine_session_id: string | null;

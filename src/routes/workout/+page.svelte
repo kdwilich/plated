@@ -20,6 +20,7 @@
 	import WarmupCard from '$lib/components/WarmupCard.svelte';
 	import GuideLink from '$lib/components/GuideLink.svelte';
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
+	import * as measures from '$lib/training/measurement';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
 	// This route has no loader of its own; `data` is the layout's, and `user`
@@ -117,14 +118,14 @@
 		if (openId) primeInputs(ex);
 	}
 
-	const usesLoad = (ex: ActiveExercise) => ex.measurement === 'load_reps' || ex.measurement === 'load_time';
-	const usesReps = (ex: ActiveExercise) => ex.measurement === 'load_reps' || ex.measurement === 'reps_only';
-	const usesTime = (ex: ActiveExercise) =>
-		ex.measurement === 'time' || ex.measurement === 'load_time' || ex.measurement === 'distance_time';
+	// Thin wrappers over $lib/training/measurement so the logger and the history
+	// editor answer these the same way. The predicates themselves live there.
+	const usesLoad = (ex: ActiveExercise) => measures.usesLoad(ex.measurement);
+	const usesReps = (ex: ActiveExercise) => measures.usesReps(ex.measurement);
+	const usesTime = (ex: ActiveExercise) => measures.usesTime(ex.measurement);
 	const isBarbell = (ex: ActiveExercise) => ex.equipment === 'barbell' || ex.equipment === 'e-z curl bar';
-	// Pull-ups, chin-ups, dips: weight_lb is net load relative to bodyweight —
-	// 0 means bodyweight only, negative means assisted, positive means added.
-	const allowsNegativeLoad = (ex: ActiveExercise) => ex.equipment === 'body only' && usesLoad(ex);
+	const allowsNegativeLoad = (ex: ActiveExercise) =>
+		measures.allowsNegativeLoad(ex.equipment, ex.measurement);
 
 	function loadLabel(ex: ActiveExercise, w: number): string {
 		if (!allowsNegativeLoad(ex)) return fmt(w);
