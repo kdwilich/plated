@@ -234,8 +234,15 @@
 		{#if profile}
 			<p class="volume-note">
 				{profile.weekly_sets_min}–{profile.weekly_sets_max} sets per muscle per week is the target.
-				Anything under the low end is flagged.
+				Anything outside that range is flagged.
 			</p>
+		{/if}
+		{#if data.warnings.length > 0}
+			<ul class="volume-warnings">
+				{#each data.warnings as w (w)}
+					<li>{w}</li>
+				{/each}
+			</ul>
 		{/if}
 	</div>
 {/if}
@@ -485,6 +492,22 @@
 		font-size: 12px;
 		color: $text-faint;
 		line-height: 1.45;
+	}
+
+	.volume-warnings {
+		margin-top: $space-3;
+		padding-left: $space-4;
+		list-style: disc;
+
+		li {
+			font-size: 13px;
+			color: $signal;
+			line-height: 1.45;
+
+			+ li {
+				margin-top: $space-2;
+			}
+		}
 	}
 
 	.routine-actions {

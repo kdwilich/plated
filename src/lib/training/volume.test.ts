@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actualSetsByGroup, isUnderTarget, MAJOR_GROUPS, DISPLAY_GROUPS, type TrainedExercise } from './volume.ts';
+import {
+	actualSetsByGroup,
+	isUnderTarget,
+	volumeWarnings,
+	MAJOR_GROUPS,
+	DISPLAY_GROUPS,
+	type TrainedExercise
+} from './volume.ts';
+import { PROFILES } from './profiles.ts';
+import type { RoutineDraft } from './types.ts';
 
 const trained = (o: Partial<TrainedExercise>): TrainedExercise => ({
 	primary_muscles: [],
@@ -130,4 +139,74 @@ test('only groups with a target can fall short of it', () => {
 	assert.equal(isUnderTarget('lower back', 3.5, 10), false);
 	// No profile, nothing to be short of.
 	assert.equal(isUnderTarget('back', 1, undefined), false);
+});
+
+// A minimal draft: one exercise per group we care about, at a set count we choose.
+const draftOf = (
+	entries: [primary: string, sets: number][],
+	secondary: string[] = []
+): RoutineDraft => ({
+	profile_key: 'hypertrophy',
+	warnings: [],
+	sessions: [
+		{
+			name: 'A',
+			exercises: entries.map(([m, sets], i) => ({
+				exercise: {
+					id: `x${i}`,
+					name: `Exercise ${i}`,
+					measurement: 'load_reps',
+					movement_pattern: 'horizontal_press',
+					progression: 'double',
+					equipment: 'barbell',
+					primary_muscles: [m],
+					secondary_muscles: secondary,
+					unilateral: false,
+					priority: 50
+				},
+				target_sets: sets,
+				rep_min: 6,
+				rep_max: 10,
+				rir_target: 2
+			}))
+		}
+	]
+});
+
+test('a group with no direct work at all is named', () => {
+	const w = volumeWarnings(draftOf([['chest', 12]]), PROFILES.hypertrophy);
+	assert.ok(w.some((x) => x.includes('Nothing in this routine trains quads')));
+});
+
+test('a group with only indirect work says so, with the number', () => {
+	const w = volumeWarnings(draftOf([['chest', 12]], ['triceps']), PROFILES.hypertrophy);
+	assert.ok(w.some((x) => x.includes('triceps') && x.includes('indirect')));
+});
+
+test('a group with direct work but under the minimum is named', () => {
+	const w = volumeWarnings(draftOf([['chest', 4]]), PROFILES.hypertrophy);
+	assert.ok(
+		w.some((x) => x.includes('chest gets 4 sets a week')),
+		`expected a chest shortfall, got ${JSON.stringify(w)}`
+	);
+});
+
+test('a group over the top of the range is named too', () => {
+	const w = volumeWarnings(draftOf([['chest', 25]]), PROFILES.hypertrophy);
+	assert.ok(
+		w.some((x) => x.includes('chest gets 25 sets a week') && x.includes('over')),
+		`expected a chest overshoot, got ${JSON.stringify(w)}`
+	);
+});
+
+test('a group inside the range is not mentioned', () => {
+	const w = volumeWarnings(draftOf([['chest', 12]]), PROFILES.hypertrophy);
+	assert.ok(!w.some((x) => x.startsWith('chest gets')));
+});
+
+test('traps and lower back are never reported as short', () => {
+	// They have no target, so they cannot fall below one.
+	const w = volumeWarnings(draftOf([['traps', 3]]), PROFILES.hypertrophy);
+	assert.ok(!w.some((x) => x.includes('traps gets')));
+	assert.ok(!w.some((x) => x.includes('lower back gets')));
 });

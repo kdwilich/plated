@@ -2,6 +2,7 @@
 // a routine is a rotation, and "next" is whatever follows the last thing done.
 
 import type { RoutineDraft, SessionDraft } from './types.ts';
+import type { Profile } from './profiles.ts';
 
 // Collapse the dataset's 17 muscles into the groups a lifter thinks in.
 const GROUP: Record<string, string> = {
@@ -124,6 +125,47 @@ export function weeklySetsByGroup(draft: RoutineDraft): Record<string, number> {
 		}
 	}
 	for (const g of Object.keys(out)) out[g] = Math.round(out[g] * 2) / 2;
+	return out;
+}
+
+/**
+ * Everything a routine's volume has to confess, from the routine alone.
+ *
+ * Recomputed rather than stored, deliberately: a routine is editable, and a
+ * warning saved at generate time would go on insisting a muscle was neglected
+ * after you added the exercise that fixed it. This reads the routine in front
+ * of you.
+ *
+ * Only MAJOR_GROUPS are judged — traps and lower back have no target to miss.
+ */
+export function volumeWarnings(draft: RoutineDraft, profile: Profile): string[] {
+	const out: string[] = [];
+	const volume = weeklySetsByGroup(draft);
+	const all = draft.sessions.flatMap((s) => s.exercises);
+
+	for (const group of MAJOR_GROUPS) {
+		const direct = all.some(
+			(pe) =>
+				pe.exercise.movement_pattern &&
+				pe.exercise.primary_muscles.some((m) => muscleGroup(m) === group)
+		);
+		const sets = volume[group] ?? 0;
+		if (!direct) {
+			out.push(
+				sets > 0
+					? `${group} only gets indirect work (${sets} sets). Add another ${group} exercise if you want it trained directly.`
+					: `Nothing in this routine trains ${group}.`
+			);
+		} else if (sets < profile.weekly_sets_min) {
+			out.push(
+				`${group} gets ${sets} sets a week, under the ${profile.weekly_sets_min} this profile aims for. Add another ${group} exercise or another training day.`
+			);
+		} else if (sets > profile.weekly_sets_max) {
+			out.push(
+				`${group} gets ${sets} sets a week, over the ${profile.weekly_sets_max} this profile tops out at. Drop a ${group} exercise if the sessions feel long.`
+			);
+		}
+	}
 	return out;
 }
 

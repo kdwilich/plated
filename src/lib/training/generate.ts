@@ -10,7 +10,7 @@ import type {
 	SessionDraft
 } from './types.ts';
 import { PROFILES } from './profiles.ts';
-import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup } from './volume.ts';
+import { MAJOR_GROUPS, muscleGroup, volumeWarnings, weeklySetsByGroup } from './volume.ts';
 import { primaryGroups, secondaryGroups, type Force } from './filters.ts';
 
 export type SplitStyle = 'full_body' | 'targeted';
@@ -447,39 +447,12 @@ export function generate(input: GenerateInput): RoutineDraft {
 	}
 
 	// The pass above can only add sets to an exercise that trains the group
-	// directly, and only up to the caps. Both ways of falling short are worth
-	// saying out loud: a group with no direct work at all is invisible to the
-	// pass, and a group whose few slots ran out of room is invisible to the
-	// volume table, which shows a number without saying it is as high as this
-	// structure goes.
-	const finalVolume = weeklySetsByGroup(draft);
-	for (const group of MAJOR_GROUPS) {
-		const direct = all.some((pe) =>
-			pe.exercise.primary_muscles.some((m) => muscleGroup(m) === group)
-		);
-		const sets = finalVolume[group] ?? 0;
-		if (!direct) {
-			warnings.push(
-				sets > 0
-					? `${group} only gets indirect work (${sets} sets). Add another ${group} exercise if you want it trained directly.`
-					: `Nothing in this routine trains ${group}.`
-			);
-			continue;
-		}
-		if (sets < profile.weekly_sets_min) {
-			warnings.push(
-				`${group} gets ${sets} sets a week, under the ${profile.weekly_sets_min} this profile aims for. Add another ${group} exercise or another training day.`
-			);
-		} else if (sets > profile.weekly_sets_max) {
-			// The volume pass will not add past the ceiling, but the template's
-			// own slots can sit above it — six quad-primary slots across four
-			// full body days overshoot before a single set is added. Trimming
-			// them is the lifter's call, so this says so rather than acting.
-			warnings.push(
-				`${group} gets ${sets} sets a week, over the ${profile.weekly_sets_max} this profile tops out at. Drop a ${group} exercise if the sessions feel long.`
-			);
-		}
-	}
+	// directly, and only up to the caps — so a group can still finish short, or
+	// (where the template's own slots overshoot before a set is added) long.
+	// Both are worth saying out loud, and the routine page has to be able to say
+	// the same things about a routine you have since edited, so the judgement
+	// lives in volume.ts rather than here.
+	warnings.push(...volumeWarnings(draft, profile));
 
 	return draft;
 }
