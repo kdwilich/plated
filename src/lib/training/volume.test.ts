@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actualSetsByGroup, type TrainedExercise } from './volume.ts';
+import { actualSetsByGroup, MAJOR_GROUPS, DISPLAY_GROUPS, type TrainedExercise } from './volume.ts';
 
 const trained = (o: Partial<TrainedExercise>): TrainedExercise => ({
 	primary_muscles: [],
@@ -60,9 +60,9 @@ test('nothing trained is an empty table', () => {
 
 test('one exercise credits a group once, however many of its muscles land there', () => {
 	// Barbell Deadlift's real tagging: lower back primary, with lats, middle
-	// back and traps secondary. All four collapse to `back`, and the old
-	// scoring paid for each one — 7.5 sets of "back" from three sets of
-	// deadlifts, which is why back always read as covered.
+	// back and traps secondary. `lats` and `middle back` both collapse to
+	// `back`, and the old scoring paid for each one — three sets of deadlifts
+	// booked 7.5 sets of "back", which is why back always read as covered.
 	const vol = actualSetsByGroup([
 		trained({
 			primary_muscles: ['lower back'],
@@ -71,7 +71,8 @@ test('one exercise credits a group once, however many of its muscles land there'
 			sets: 3
 		})
 	]);
-	assert.equal(vol.back, 3);
+	assert.equal(vol.back, 1.5);
+	assert.equal(vol['lower back'], 3);
 	assert.equal(vol.hamstrings, 1.5);
 });
 
@@ -94,4 +95,27 @@ test('two secondaries in one group still pay only once', () => {
 		trained({ primary_muscles: ['chest'], secondary_muscles: ['lats', 'traps'], sets: 4 })
 	]);
 	assert.equal(vol.back, 2);
+});
+
+test('traps and lower back are their own groups, not pulling volume', () => {
+	// A shrug is not a row and a deadlift is not a pulldown. Folding all four
+	// dataset muscles into `back` let a routine with one set of lat work
+	// report a covered back.
+	const vol = actualSetsByGroup([
+		trained({ primary_muscles: ['traps'], movement_pattern: 'shrug', sets: 3 }),
+		trained({ primary_muscles: ['lower back'], movement_pattern: 'hip_hinge', sets: 3 }),
+		trained({ primary_muscles: ['lats'], movement_pattern: 'vertical_pull', sets: 3 })
+	]);
+	assert.equal(vol.back, 3);
+	assert.equal(vol.traps, 3);
+	assert.equal(vol['lower back'], 3);
+});
+
+test('the coverage contract does not demand a slot for traps or lower back', () => {
+	// Both get plenty from rows, hinges and carries. Naming them in
+	// MAJOR_GROUPS would make the generator warn about a gap that is not one.
+	assert.ok(!(MAJOR_GROUPS as readonly string[]).includes('traps'));
+	assert.ok(!(MAJOR_GROUPS as readonly string[]).includes('lower back'));
+	assert.ok((DISPLAY_GROUPS as readonly string[]).includes('traps'));
+	assert.ok((DISPLAY_GROUPS as readonly string[]).includes('lower back'));
 });

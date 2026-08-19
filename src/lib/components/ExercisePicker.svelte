@@ -6,7 +6,7 @@
 
 	import { onMount } from 'svelte';
 	import { FORCES, primaryGroups, type Force } from '$lib/training/filters';
-	import { MAJOR_GROUPS } from '$lib/training/volume';
+	import { DISPLAY_GROUPS } from '$lib/training/volume';
 	import type { ExerciseRow } from '$lib/server/catalog';
 	import GuideLink from '$lib/components/GuideLink.svelte';
 
@@ -140,7 +140,7 @@
 	</div>
 
 	<div class="chips" role="group" aria-label="Filter by muscle">
-		{#each MAJOR_GROUPS as g (g)}
+		{#each DISPLAY_GROUPS as g (g)}
 			<button
 				type="button"
 				class="chip"

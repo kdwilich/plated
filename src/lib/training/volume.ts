@@ -8,8 +8,11 @@ const GROUP: Record<string, string> = {
 	chest: 'chest',
 	lats: 'back',
 	'middle back': 'back',
-	'lower back': 'back',
-	traps: 'back',
+	// Not `back`. A shrug is not a row and a deadlift is not a pulldown —
+	// folding these two in let a routine whose only lat work was one set of
+	// pullups report a covered back and stop asking for pulling volume.
+	'lower back': 'lower back',
+	traps: 'traps',
 	shoulders: 'shoulders',
 	biceps: 'biceps',
 	forearms: 'biceps',
@@ -46,6 +49,15 @@ export const MAJOR_GROUPS = [
 	'calves',
 	'abs'
 ] as const;
+
+/**
+ * Every group worth showing in a volume table or offering as a filter.
+ * MAJOR_GROUPS is the narrower list: the groups a routine must train
+ * *directly*, which is why traps and lower back are absent from it — both are
+ * fed generously by rows, hinges and carries without a slot of their own, and
+ * naming them here would make the generator warn about a gap that is not one.
+ */
+export const DISPLAY_GROUPS = [...MAJOR_GROUPS, 'traps', 'lower back'] as const;
 
 /**
  * One exercise's credit, applied once per group. A group is worth a full set

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import GuideLink from '$lib/components/GuideLink.svelte';
 	import { plateEquivalent } from '$lib/training/records';
-	import { MAJOR_GROUPS, muscleGroup } from '$lib/training/volume';
+	import { DISPLAY_GROUPS, muscleGroup } from '$lib/training/volume';
 	import type { HeadlineRecord } from '$lib/server/stats';
 
 	let { data } = $props();
@@ -45,7 +45,7 @@
 		return out;
 	});
 
-	const groups = $derived([...MAJOR_GROUPS, 'other'] as string[]);
+	const groups = $derived([...DISPLAY_GROUPS, 'other'] as string[]);
 
 	const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 

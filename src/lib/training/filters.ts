@@ -40,6 +40,10 @@ const GROUP_FORCE: Record<string, Force> = {
 	shoulders: 'push',
 	triceps: 'push',
 	back: 'pull',
+	// Both used to be part of `back` and classified as pull through it. They
+	// are their own groups now; the classification does not change.
+	traps: 'pull',
+	'lower back': 'pull',
 	biceps: 'pull',
 	quads: 'legs',
 	hamstrings: 'legs',

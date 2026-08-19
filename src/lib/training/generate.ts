@@ -303,6 +303,12 @@ export function generate(input: GenerateInput): RoutineDraft {
 
 	const cap = Math.max(profile.compound.sets, profile.isolation.sets) + 2;
 	const all = draft.sessions.flatMap((s) => s.exercises);
+	// Only the groups a routine owes direct work to get chased. traps and
+	// lower back are scored and displayed but sit outside MAJOR_GROUPS,
+	// because rows, hinges and carries feed them without a slot of their own —
+	// handing them a weekly target too would pump shrugs and deadlifts to the
+	// cap chasing a number nobody set.
+	const owed = new Set<string>(MAJOR_GROUPS);
 	for (let iter = 0; iter < 80; iter++) {
 		const vol = weeklySetsByGroup(draft);
 		const pick = all.find(
@@ -310,7 +316,7 @@ export function generate(input: GenerateInput): RoutineDraft {
 				pe.target_sets < cap &&
 				pe.exercise.primary_muscles.some((m) => {
 					const g = muscleGroup(m);
-					return g !== null && (vol[g] ?? 0) < targetFor(g);
+					return g !== null && owed.has(g) && (vol[g] ?? 0) < targetFor(g);
 				})
 		);
 		if (!pick) break;

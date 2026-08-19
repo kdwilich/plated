@@ -424,3 +424,34 @@ test('the plan and the log score an exercise identically', () => {
 	);
 	assert.deepEqual(planned, logged);
 });
+
+test('every generated routine has real pulling work, not just hinges and shrugs', () => {
+	// The regression: back read as covered because deadlifts and shrugs paid
+	// into it. Vertical and horizontal pulls are the only things that count.
+	for (const days of [3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			const back = weeklySetsByGroup(draft).back ?? 0;
+			assert.ok(back >= 6, `${days}-day ${splitStyle} gives back only ${back} sets`);
+		}
+	}
+});
+
+test('the volume pass chases targets only for groups the routine owes work to', () => {
+	// traps and lower back are deliberately outside MAJOR_GROUPS: rows, hinges
+	// and carries feed them without a slot of their own. Giving them a weekly
+	// target anyway pumped shrugs and deadlifts to the cap chasing a number
+	// nobody set.
+	const profile = PROFILES.hypertrophy;
+	const draft = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', catalog: catalog() });
+	const major = new Set<string>(MAJOR_GROUPS);
+	for (const pe of draft.sessions.flatMap((s) => s.exercises)) {
+		const groups = pe.exercise.primary_muscles.map(muscleGroup).filter((g) => g !== null);
+		if (groups.some((g) => major.has(g as string))) continue;
+		assert.equal(
+			pe.target_sets,
+			profile.isolation.sets,
+			`${pe.exercise.name} trains only ${groups.join('/')} but was topped up to ${pe.target_sets} sets`
+		);
+	}
+});
