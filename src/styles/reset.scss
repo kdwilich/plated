@@ -39,6 +39,18 @@ a {
 	text-decoration: none;
 }
 
+// Two quick taps on a control read as a double-tap gesture, which zooms the
+// page — hitting the weight steppers at speed was doing it constantly.
+// `manipulation` drops double-tap-to-zoom while leaving scroll and pinch
+// alone, and unlike the viewport meta it is honoured by iOS Safari.
+button,
+a,
+label,
+input,
+select {
+	touch-action: manipulation;
+}
+
 ul,
 ol {
 	list-style: none;

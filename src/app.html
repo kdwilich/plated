@@ -2,7 +2,14 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<!-- Zoom off: this is a one-handed logger, and a stray double-tap used to
+		     leave the page magnified mid-set. iOS Safari overrides user-scalable
+		     for accessibility, so `touch-action: manipulation` in reset.scss is
+		     what actually closes the double-tap path there. -->
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+		/>
 		<meta name="theme-color" content="#0b0c0e" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
