@@ -429,10 +429,24 @@
 {/if}
 
 <style lang="scss">
+	// Pinned so the elapsed clock stays on screen through a long session: you
+	// glance at it between sets instead of scrolling back to the top. Sits
+	// under GuideModal (z-index 20) so the guide sheet still covers it.
 	.session-head {
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		background: $ground;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		// Stuck at top: 0 the header's own top edge IS the viewport edge, so
+		// its padding has to carry the status-bar inset — the app is a
+		// standalone PWA with viewport-fit=cover. env() is 0 in a browser tab,
+		// where the negative margin then cancels main's top padding exactly and
+		// the resting layout is unchanged.
+		margin-top: -$space-4;
+		padding-top: calc(#{$space-4} + env(safe-area-inset-top, 0px));
 		padding-bottom: $space-3;
 		border-bottom: 1px solid $hairline;
 		margin-bottom: $space-4;
