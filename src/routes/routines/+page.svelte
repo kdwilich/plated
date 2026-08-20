@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	// The library. Destructive actions are deliberately absent: delete and
 	// duplicate live in the editor, where you can see what you are acting on.
 	// A list of near-identical rows is the worst place for a delete button.
@@ -9,7 +10,7 @@
 	const profileName = (key: string) => data.profiles.find((p) => p.key === key)?.name ?? key;
 </script>
 
-<svelte:head><title>Plateload — routines</title></svelte:head>
+<svelte:head><title>{APP_NAME} — routines</title></svelte:head>
 
 <h1 class="display page-title">Routines</h1>
 

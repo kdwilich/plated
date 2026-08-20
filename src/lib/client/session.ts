@@ -60,6 +60,10 @@ export interface ActiveSession {
 	};
 }
 
+// Deliberately NOT renamed with the app. This is the key an existing phone's
+// IndexedDB is filed under, and a rename orphans whatever session is in
+// progress on it — a set logged in a dead gym signal, gone. The name is
+// internal; nobody sees it. See docs/renaming-the-app.md.
 const DB_NAME = 'plateload';
 const DB_VERSION = 1;
 const ACTIVE = 'active_session';

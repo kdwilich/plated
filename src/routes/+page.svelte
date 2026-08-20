@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { loadActive, saveActive, type ActiveSession } from '$lib/client/session';
@@ -37,7 +38,7 @@
 	}
 </script>
 
-<svelte:head><title>Plateload</title></svelte:head>
+<svelte:head><title>{APP_NAME}</title></svelte:head>
 
 {#if resumable && !resumable.finished_at}
 	<a class="resume card" href="/workout">

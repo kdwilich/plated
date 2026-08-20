@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { enhance } from '$app/forms';
 
 	let { data, form } = $props();
@@ -12,7 +13,7 @@
 
 </script>
 
-<svelte:head><title>Plateload — gym</title></svelte:head>
+<svelte:head><title>{APP_NAME} — gym</title></svelte:head>
 
 <h1 class="display page-title">Your gym</h1>
 <p class="hint">The generator only prescribes what's here, and the plate math only uses plates you have.</p>

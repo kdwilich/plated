@@ -1,14 +1,15 @@
 <script lang="ts">
+	import { APP_NAME, APP_WORDMARK } from '$lib/brand';
 	import { enhance } from '$app/forms';
 
 	let { form } = $props();
 </script>
 
-<svelte:head><title>Plateload — create an account</title></svelte:head>
+<svelte:head><title>{APP_NAME} — create an account</title></svelte:head>
 
 <div class="auth">
 	<header>
-		<h1 class="display wordmark">PLATELOAD</h1>
+		<h1 class="display wordmark">{APP_WORDMARK}</h1>
 		<p class="label">Create an account</p>
 	</header>
 
