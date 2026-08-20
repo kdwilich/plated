@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { enhance } from '$app/forms';
 
 	let { data } = $props();
@@ -22,7 +23,7 @@
 	}
 </script>
 
-<svelte:head><title>Plateload — history</title></svelte:head>
+<svelte:head><title>{APP_NAME} — history</title></svelte:head>
 
 <header class="head">
 	<h1 class="display page-title">History</h1>

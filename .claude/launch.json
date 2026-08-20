@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "plateload",
+      "name": "plated",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:wrangler"],
       "port": 8787

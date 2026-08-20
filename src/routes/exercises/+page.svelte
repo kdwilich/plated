@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { goto } from '$app/navigation';
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 
@@ -26,7 +27,7 @@
 	});
 </script>
 
-<svelte:head><title>Plateload — exercises</title></svelte:head>
+<svelte:head><title>{APP_NAME} — exercises</title></svelte:head>
 
 <h1 class="display page-title">Exercises</h1>
 
