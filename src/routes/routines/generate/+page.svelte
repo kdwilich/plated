@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { defaultSplitStyle, type Emphasis, type SplitStyle } from '$lib/training/generate';
+	import { isUnderTarget } from '$lib/training/volume';
 
 	let { data, form } = $props();
 
@@ -153,9 +154,19 @@
 {#if form?.draft}
 	<section class="preview">
 		<h2 class="display preview-title">Draft</h2>
-		{#each form.draft.warnings as w (w)}
+		{#each form.structuralWarnings ?? [] as w (w)}
 			<p class="warning">{w}</p>
 		{/each}
+		{#if form.warnings?.length}
+			<details class="volume-warnings">
+				<summary>{form.warningSummary}</summary>
+				<ul>
+					{#each form.warnings as w (w.group)}
+						<li>{w.message}</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
 
 		{#each form.draft.sessions as s (s.name)}
 			<div class="card preview-session">
@@ -177,7 +188,7 @@
 				{#each Object.entries(form.volume) as [group, sets] (group)}
 					<li class="hairline-row preview-row">
 						<span class="preview-name">{group}</span>
-						<span class="num preview-rx" class:low={form.profile && sets < form.profile.weekly_sets_min}>{sets}</span>
+						<span class="num preview-rx" class:low={isUnderTarget(group, sets, form.profile?.weekly_sets_min)}>{sets}</span>
 					</li>
 				{/each}
 			</ul>
@@ -307,6 +318,33 @@
 		margin: $space-3 0;
 		font-size: 13px;
 		color: $signal;
+	}
+
+	.volume-warnings {
+		margin: $space-3 0;
+
+		summary {
+			font-size: 13px;
+			color: $signal;
+			cursor: pointer;
+			line-height: 1.45;
+		}
+
+		ul {
+			margin-top: $space-2;
+			padding-left: $space-4;
+			list-style: disc;
+		}
+
+		li {
+			font-size: 13px;
+			color: $signal;
+			line-height: 1.45;
+
+			+ li {
+				margin-top: $space-2;
+			}
+		}
 	}
 
 	.preview {

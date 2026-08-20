@@ -18,7 +18,7 @@ import {
 } from '$lib/server/routines';
 import { getExercise } from '$lib/server/catalog';
 import { PROFILES, prescriptionFor } from '$lib/training/profiles';
-import { weeklySetsByGroup } from '$lib/training/volume';
+import { volumeSummary, volumeWarnings, weeklySetsByGroup } from '$lib/training/volume';
 
 // `locals.user!` throughout: hooks.server.ts guarantees a user on every
 // non-public route, and none of these are public. A defensive branch here
@@ -28,10 +28,19 @@ export const load: PageServerLoad = async ({ params, platform, locals }) => {
 	const uid = locals.user!.id;
 	const routine = await getRoutine(db, uid, params.id);
 	if (!routine) error(404, 'No such routine');
+	// Recomputed on every load rather than stored with the routine: this page
+	// edits exercises and sets, and a warning saved at generate time would go
+	// on insisting a muscle was neglected after you added the exercise that
+	// fixed it.
+	const draft = routineToDraft(routine);
+	const profile = PROFILES[routine.profile_key] ?? PROFILES.hypertrophy;
+	const warnings = volumeWarnings(draft, profile);
 	return {
 		routine,
 		profiles: Object.values(PROFILES),
-		volume: weeklySetsByGroup(routineToDraft(routine))
+		volume: weeklySetsByGroup(draft),
+		warnings,
+		warningSummary: volumeSummary(warnings, profile)
 	};
 };
 

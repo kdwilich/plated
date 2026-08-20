@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generate, defaultSplitStyle } from './generate.ts';
-import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
+import { MAJOR_GROUPS, muscleGroup, weeklySetsByGroup, actualSetsByGroup, stalenessByGroup, nextPosition, groupsForSession } from './volume.ts';
 import { PROFILES } from './profiles.ts';
 import type { Exercise, MovementPattern } from './types.ts';
+import { forceCategory, primaryGroups, type Force } from './filters.ts';
 
 let n = 0;
 function ex(
@@ -35,7 +36,13 @@ function catalog(): Exercise[] {
 	return [
 		ex('squat', 'barbell', ['quadriceps'], 100, ['glutes', 'hamstrings']),
 		ex('squat', 'machine', ['quadriceps'], 80, ['glutes']),
-		ex('hip_hinge', 'barbell', ['hamstrings'], 100, ['glutes', 'lower back']),
+		// The top hinge is a conventional deadlift: `lower back` primary, with
+		// hamstrings only secondary. This matches the real catalog, where
+		// Barbell Deadlift outranks Romanian Deadlift 100 to 96 — and it is the
+		// divergence that let the hamstrings bug hide, because a fixture whose
+		// every hinge was hamstrings-primary could never reproduce it.
+		ex('hip_hinge', 'barbell', ['lower back'], 100, ['glutes', 'hamstrings', 'lats', 'traps']),
+		ex('hip_hinge', 'barbell', ['hamstrings'], 96, ['glutes', 'lower back']),
 		ex('hip_hinge', 'machine', ['hamstrings'], 60, ['glutes']),
 		ex('horizontal_press', 'barbell', ['chest'], 100, ['triceps', 'shoulders']),
 		ex('horizontal_press', 'machine', ['chest'], 70, ['triceps']),
@@ -125,12 +132,20 @@ const directGroups = (draft: { sessions: { exercises: { exercise: Exercise }[] }
 };
 
 test('every major muscle group gets direct work from 3 days up, in both styles', () => {
+	// Every emphasis, not just balanced. This test only ever ran the default
+	// before, which is why de-emphasis could delete the last hamstring slot in
+	// six different configurations without anything going red.
 	for (const days of [3, 4, 5, 6] as const) {
 		for (const splitStyle of ['full_body', 'targeted'] as const) {
-			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
-			const covered = directGroups(draft);
-			for (const group of MAJOR_GROUPS) {
-				assert.ok(covered.has(group), `${group} has no direct work in a ${days}-day ${splitStyle} split`);
+			for (const emphasis of ['balanced', 'lower', 'upper'] as const) {
+				const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis, catalog: catalog() });
+				const covered = directGroups(draft);
+				for (const group of MAJOR_GROUPS) {
+					assert.ok(
+						covered.has(group),
+						`${group} has no direct work in a ${days}-day ${splitStyle} split with ${emphasis} emphasis`
+					);
+				}
 			}
 		}
 	}
@@ -181,7 +196,13 @@ test('glutes clear the profile minimum wherever the split structure allows', () 
 	for (const [days, splitStyle] of reachable) {
 		const draft = generate({ daysPerWeek: days as 3 | 4 | 5 | 6, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
 		const glutes = weeklySetsByGroup(draft).glutes ?? 0;
-		assert.ok(glutes >= min, `${days}-day ${splitStyle} gives glutes only ${glutes} sets`);
+		// Either it clears the minimum or the routine admits it fell short.
+		// Driving the lone glute slot to five sets to reach a round number is
+		// exactly the saturation this branch removed.
+		assert.ok(
+			glutes >= min || draft.warnings.some((w) => w.includes('glutes')),
+			`${days}-day ${splitStyle} gives glutes only ${glutes} sets and says nothing`
+		);
 	}
 });
 
@@ -206,17 +227,28 @@ test('a group with no direct work produces a warning instead of failing silently
 
 test('volume pass: a below-minimum group means all its direct exercises hit the cap', () => {
 	const profile = PROFILES.hypertrophy;
-	const cap = Math.max(profile.compound.sets, profile.isolation.sets) + 2;
+	// Compounds and accessories cap separately now — a fifth set of squats and
+	// a fifth set of leg raises were never the same prescription.
+	const capOf = (pe: { rep_min: number }) =>
+		pe.rep_min === profile.compound.rep_min ? profile.compound.sets + 1 : profile.isolation.sets + 1;
 	const draft = generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', catalog: catalog() });
 	const vol = weeklySetsByGroup(draft);
 	const all = draft.sessions.flatMap((s) => s.exercises);
+	const owed = new Set<string>(MAJOR_GROUPS);
 	for (const [group, sets] of Object.entries(vol)) {
+		// traps and lower back have no weekly target to fall short of — the
+		// volume pass deliberately leaves them to what rows and hinges give.
+		if (!owed.has(group)) continue;
 		if (sets >= profile.weekly_sets_min) continue;
 		const direct = all.filter((pe) =>
 			pe.exercise.primary_muscles.some((m) => muscleGroup(m) === group)
 		);
 		for (const pe of direct) {
-			assert.equal(pe.target_sets, cap, `${group} is short (${sets}) but ${pe.exercise.name} sits at ${pe.target_sets}/${cap} sets`);
+			assert.equal(
+				pe.target_sets,
+				capOf(pe),
+				`${group} is short (${sets}) but ${pe.exercise.name} sits at ${pe.target_sets}/${capOf(pe)} sets`
+			);
 		}
 	}
 });
@@ -405,4 +437,207 @@ test('rotation is cyclic and starts at the top', () => {
 	assert.equal(nextPosition(4, null), 0);
 	assert.equal(nextPosition(4, 0), 1);
 	assert.equal(nextPosition(4, 3), 0);
+});
+
+test('the plan and the log score an exercise identically', () => {
+	// weeklySetsByGroup and actualSetsByGroup must never drift: the stats page
+	// shows them side by side and calls the difference under-training.
+	const draft = generate({ daysPerWeek: 4, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', catalog: catalog() });
+	const planned = weeklySetsByGroup(draft);
+	const logged = actualSetsByGroup(
+		draft.sessions.flatMap((s) =>
+			s.exercises.map((pe) => ({
+				primary_muscles: pe.exercise.primary_muscles,
+				secondary_muscles: pe.exercise.secondary_muscles,
+				movement_pattern: pe.exercise.movement_pattern,
+				sets: pe.target_sets
+			}))
+		)
+	);
+	assert.deepEqual(planned, logged);
+});
+
+test('every generated routine has real pulling work, not just hinges and shrugs', () => {
+	// The regression: back read as covered because deadlifts and shrugs paid
+	// into it. Vertical and horizontal pulls are the only things that count.
+	for (const days of [3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			const back = weeklySetsByGroup(draft).back ?? 0;
+			assert.ok(back >= 6, `${days}-day ${splitStyle} gives back only ${back} sets`);
+		}
+	}
+});
+
+test('the volume pass chases targets only for groups the routine owes work to', () => {
+	// traps and lower back are deliberately outside MAJOR_GROUPS: rows, hinges
+	// and carries feed them without a slot of their own. Giving them a weekly
+	// target anyway pumped shrugs and deadlifts to the cap chasing a number
+	// nobody set.
+	const profile = PROFILES.hypertrophy;
+	const draft = generate({ daysPerWeek: 3, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', catalog: catalog() });
+	const major = new Set<string>(MAJOR_GROUPS);
+	for (const pe of draft.sessions.flatMap((s) => s.exercises)) {
+		const groups = pe.exercise.primary_muscles.map(muscleGroup).filter((g) => g !== null);
+		if (groups.some((g) => major.has(g as string))) continue;
+		assert.equal(
+			pe.target_sets,
+			profile.isolation.sets,
+			`${pe.exercise.name} trains only ${groups.join('/')} but was topped up to ${pe.target_sets} sets`
+		);
+	}
+});
+
+// Which forces a targeted session is allowed to contain, read off its own
+// name. Core work is exempt: abs belong wherever they fit.
+const allowedForces = (name: string): Force[] | null => {
+	if (/^push/i.test(name)) return ['push'];
+	if (/^pull/i.test(name)) return ['pull'];
+	if (/^(legs|lower)/i.test(name)) return ['legs'];
+	if (/^upper/i.test(name)) return ['push', 'pull'];
+	return null; // full body trains everything by construction
+};
+
+test('emphasis never adds an exercise the session is not for', () => {
+	// The regression: "upper" emphasis put a barbell curl on push day and a
+	// lateral raise on pull day, next to the face pull already covering rear
+	// delts. slotRegion only knew upper/lower/core, so both looked upper.
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const emphasis of ['balanced', 'lower', 'upper'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle: 'targeted', emphasis, catalog: catalog() });
+			for (const s of draft.sessions) {
+				const allowed = allowedForces(s.name);
+				if (!allowed) continue;
+				for (const pe of s.exercises) {
+					const f = forceCategory(pe.exercise);
+					if (f === 'core' || f === null) continue;
+					assert.ok(
+						allowed.includes(f),
+						`${days}-day ${emphasis}: "${s.name}" holds ${pe.exercise.name}, which is ${f}`
+					);
+				}
+			}
+		}
+	}
+});
+
+test('a session that already squats gets a hamstring hinge, not a second max-effort pull', () => {
+	// Barbell Deadlift outranks Romanian Deadlift 100 to 96, so leg day led
+	// with a squat and followed it with the heaviest hinge in the catalog —
+	// two maximal axial loads in one session, and still nothing training the
+	// hamstrings directly, since a conventional deadlift is lower-back primary.
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			for (const s of draft.sessions) {
+				const patterns = s.exercises.map((e) => e.exercise.movement_pattern);
+				if (!patterns.includes('squat') || !patterns.includes('hip_hinge')) continue;
+				const hinge = s.exercises.find((e) => e.exercise.movement_pattern === 'hip_hinge')!;
+				assert.ok(
+					primaryGroups(hinge.exercise).includes('hamstrings'),
+					`${days}-day ${splitStyle} "${s.name}": squat is followed by ${hinge.exercise.name}, which trains ${primaryGroups(hinge.exercise).join('/')}`
+				);
+			}
+		}
+	}
+});
+
+test('extra sets spread across a session instead of saturating the first exercise', () => {
+	// `.find()` restarted at index 0 every iteration, so it drove the first
+	// eligible exercise to the cap before touching the second. That is the
+	// whole origin of "5 sets of bench, 5 of incline, 5 of pushdowns" — nobody
+	// chose those numbers, they fell out of list order.
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			for (const s of draft.sessions) {
+				const compounds = s.exercises.filter((e) => e.rep_min === PROFILES.hypertrophy.compound.rep_min);
+				const isos = s.exercises.filter((e) => e.rep_min === PROFILES.hypertrophy.isolation.rep_min);
+				for (const group of [compounds, isos]) {
+					if (group.length < 2) continue;
+					const sets = group.map((e) => e.target_sets);
+					assert.ok(
+						Math.max(...sets) - Math.min(...sets) <= 1,
+						`${days}-day ${splitStyle} "${s.name}": sets ${sets.join('/')} are lopsided`
+					);
+				}
+			}
+		}
+	}
+});
+
+test('a compound never carries as many sets as the old blanket cap allowed', () => {
+	// One cap for everything meant five sets of barbell squats and five sets
+	// of hanging leg raises were the same prescription. They are not.
+	const profile = PROFILES.hypertrophy;
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', catalog: catalog() });
+		for (const pe of draft.sessions.flatMap((s) => s.exercises)) {
+			const isCompound = pe.rep_min === profile.compound.rep_min;
+			const cap = isCompound ? profile.compound.sets + 1 : profile.isolation.sets + 1;
+			assert.ok(pe.target_sets <= cap, `${pe.exercise.name} sits at ${pe.target_sets} sets, over ${cap}`);
+		}
+	}
+});
+
+test('no muscle group is planned past the top of the profile range', () => {
+	// weekly_sets_max existed on every profile and was used only to compute a
+	// midpoint. Nothing enforced it: 6-day full body booked back at 46.5 and
+	// shoulders at 33 against a stated 10-20.
+	const profile = PROFILES.hypertrophy;
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			for (const emphasis of ['balanced', 'lower', 'upper'] as const) {
+				const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis, catalog: catalog() });
+				const vol = weeklySetsByGroup(draft);
+				for (const g of MAJOR_GROUPS) {
+					if ((vol[g] ?? 0) <= profile.weekly_sets_max) continue;
+					// Six quad-primary slots across four full body days overshoot
+					// before a single set is added, and trimming the template is
+					// the lifter's call — so the contract is that the routine says
+					// so, not that it silently stays under.
+					assert.ok(
+						draft.warnings.some((w) => w.includes(g)),
+						`${days}-day ${splitStyle}/${emphasis}: ${g} planned at ${vol[g]} against a ceiling of ${profile.weekly_sets_max}, with no warning`
+					);
+				}
+			}
+		}
+	}
+});
+
+test('no session runs past its set budget', () => {
+	for (const days of [2, 3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			for (const emphasis of ['balanced', 'lower', 'upper'] as const) {
+				const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, emphasis, catalog: catalog() });
+				for (const s of draft.sessions) {
+					const sets = s.exercises.reduce((a, e) => a + e.target_sets, 0);
+					assert.ok(
+						sets <= PROFILES.hypertrophy.session_set_cap,
+						`${days}-day ${splitStyle}/${emphasis} "${s.name}" runs ${sets} sets`
+					);
+				}
+			}
+		}
+	}
+});
+
+test('a group left under the minimum is named, not passed over in silence', () => {
+	// The old warning fired only on *zero* direct work, so a 3-day targeted
+	// split could leave quads at 6.5 and abs at 5 and say nothing at all.
+	const profile = PROFILES.hypertrophy;
+	for (const days of [3, 4, 5, 6] as const) {
+		for (const splitStyle of ['full_body', 'targeted'] as const) {
+			const draft = generate({ daysPerWeek: days, equipment: ALL_EQUIPMENT, profileKey: 'hypertrophy', splitStyle, catalog: catalog() });
+			const vol = weeklySetsByGroup(draft);
+			for (const g of MAJOR_GROUPS) {
+				if ((vol[g] ?? 0) >= profile.weekly_sets_min) continue;
+				assert.ok(
+					draft.warnings.some((w) => w.includes(g)),
+					`${days}-day ${splitStyle}: ${g} sits at ${vol[g] ?? 0} sets with no warning. Warnings: ${JSON.stringify(draft.warnings)}`
+				);
+			}
+		}
+	}
 });

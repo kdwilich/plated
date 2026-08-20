@@ -5,7 +5,7 @@ import { getGym } from '$lib/server/gym';
 import { generatorCatalog } from '$lib/server/catalog';
 import { saveRoutineFromDraft } from '$lib/server/routines';
 import { defaultSplitStyle, generate, type Emphasis, type SplitStyle } from '$lib/training/generate';
-import { weeklySetsByGroup } from '$lib/training/volume';
+import { volumeSummary, volumeWarnings, weeklySetsByGroup } from '$lib/training/volume';
 import { PROFILES } from '$lib/training/profiles';
 import type { RoutineDraft } from '$lib/training/types';
 
@@ -40,10 +40,20 @@ export const actions: Actions = {
 			emphasis,
 			catalog
 		});
+		// The draft's own `warnings` carry both kinds mixed together. Split them
+		// for the page: volume shortfalls collapse behind one counted line,
+		// while a missing pattern or a low-frequency split has no summary form
+		// and belongs in front of you.
+		const profile = PROFILES[profileKey] ?? PROFILES.hypertrophy;
+		const warnings = volumeWarnings(draft, profile);
+		const volumeMessages = new Set(warnings.map((w) => w.message));
 		return {
 			draft,
 			volume: weeklySetsByGroup(draft),
 			profile: PROFILES[profileKey],
+			warnings,
+			warningSummary: volumeSummary(warnings, profile),
+			structuralWarnings: draft.warnings.filter((w) => !volumeMessages.has(w)),
 			days,
 			splitStyle,
 			emphasis

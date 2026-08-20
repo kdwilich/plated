@@ -6,7 +6,7 @@
 
 	import { onMount } from 'svelte';
 	import { FORCES, primaryGroups, type Force } from '$lib/training/filters';
-	import { MAJOR_GROUPS } from '$lib/training/volume';
+	import { DISPLAY_GROUPS } from '$lib/training/volume';
 	import type { ExerciseRow } from '$lib/server/catalog';
 	import GuideLink from '$lib/components/GuideLink.svelte';
 
@@ -53,7 +53,9 @@
 		biceps: 'Biceps',
 		triceps: 'Triceps',
 		calves: 'Calves',
-		abs: 'Abs'
+		abs: 'Abs',
+		traps: 'Traps',
+		'lower back': 'Low back'
 	};
 
 	let q = $state('');
@@ -140,13 +142,13 @@
 	</div>
 
 	<div class="chips" role="group" aria-label="Filter by muscle">
-		{#each MAJOR_GROUPS as g (g)}
+		{#each DISPLAY_GROUPS as g (g)}
 			<button
 				type="button"
 				class="chip"
 				class:on={group === g}
 				aria-pressed={group === g}
-				onclick={() => (group = toggle(group, g))}>{GROUP_LABEL[g]}</button
+				onclick={() => (group = toggle(group, g))}>{GROUP_LABEL[g] ?? g}</button
 			>
 		{/each}
 	</div>

@@ -2,14 +2,18 @@
 // a routine is a rotation, and "next" is whatever follows the last thing done.
 
 import type { RoutineDraft, SessionDraft } from './types.ts';
+import type { Profile } from './profiles.ts';
 
 // Collapse the dataset's 17 muscles into the groups a lifter thinks in.
 const GROUP: Record<string, string> = {
 	chest: 'chest',
 	lats: 'back',
 	'middle back': 'back',
-	'lower back': 'back',
-	traps: 'back',
+	// Not `back`. A shrug is not a row and a deadlift is not a pulldown —
+	// folding these two in let a routine whose only lat work was one set of
+	// pullups report a covered back and stop asking for pulling volume.
+	'lower back': 'lower back',
+	traps: 'traps',
 	shoulders: 'shoulders',
 	biceps: 'biceps',
 	forearms: 'biceps',
@@ -48,6 +52,65 @@ export const MAJOR_GROUPS = [
 ] as const;
 
 /**
+ * Every group worth showing in a volume table or offering as a filter.
+ * MAJOR_GROUPS is the narrower list: the groups a routine must train
+ * *directly*, which is why traps and lower back are absent from it — both are
+ * fed generously by rows, hinges and carries without a slot of their own, and
+ * naming them here would make the generator warn about a gap that is not one.
+ */
+export const DISPLAY_GROUPS = [...MAJOR_GROUPS, 'traps', 'lower back'] as const;
+
+/**
+ * Whether a group's weekly sets fall short of what the profile aims for.
+ *
+ * Only MAJOR_GROUPS have a target to fall short of. traps and lower back are
+ * scored and shown, but they are fed by rows, hinges and carries rather than
+ * by a slot of their own — flagging three sets of shrugs as a deficit invents
+ * a gap the generator deliberately does not chase and does not warn about.
+ */
+export function isUnderTarget(
+	group: string,
+	sets: number,
+	weeklySetsMin: number | undefined
+): boolean {
+	if (weeklySetsMin === undefined) return false;
+	if (!(MAJOR_GROUPS as readonly string[]).includes(group)) return false;
+	return sets < weeklySetsMin;
+}
+
+/**
+ * One exercise's credit, applied once per group. A group is worth a full set
+ * if any primary muscle lands there and half a set if only secondaries do —
+ * never both, and never once per muscle.
+ *
+ * Paying per muscle looked harmless until you notice how many of the dataset's
+ * muscles share a group. A deadlift is `lower back` primary with `lats`,
+ * `middle back` and `traps` secondary: four muscles, one group, 2.5× credit
+ * per set. Every row paid 1.5×, every curl paid 1.5× on `forearms`. Back could
+ * not help but look covered.
+ */
+function creditExercise(
+	out: Record<string, number>,
+	primary: string[],
+	secondary: string[],
+	sets: number
+): void {
+	const primaryGroups = new Set<string>();
+	for (const m of primary) {
+		const g = muscleGroup(m);
+		if (g) primaryGroups.add(g);
+	}
+	for (const g of primaryGroups) out[g] = (out[g] ?? 0) + sets;
+
+	const secondaryGroups = new Set<string>();
+	for (const m of secondary) {
+		const g = muscleGroup(m);
+		if (g && !primaryGroups.has(g)) secondaryGroups.add(g);
+	}
+	for (const g of secondaryGroups) out[g] = (out[g] ?? 0) + sets * 0.5;
+}
+
+/**
  * Weekly sets per muscle group across a full pass of the rotation.
  * Primary muscles count full; secondaries count half — a bench press is
  * real triceps work and pretending otherwise misleads the volume table.
@@ -58,18 +121,91 @@ export function weeklySetsByGroup(draft: RoutineDraft): Record<string, number> {
 		for (const { exercise, target_sets } of session.exercises) {
 			// Cardio and unpatterned oddities never count toward volume.
 			if (!exercise.movement_pattern) continue;
-			for (const m of exercise.primary_muscles) {
-				const g = muscleGroup(m);
-				if (g) out[g] = (out[g] ?? 0) + target_sets;
-			}
-			for (const m of exercise.secondary_muscles) {
-				const g = muscleGroup(m);
-				if (g) out[g] = (out[g] ?? 0) + target_sets * 0.5;
-			}
+			creditExercise(out, exercise.primary_muscles, exercise.secondary_muscles, target_sets);
 		}
 	}
 	for (const g of Object.keys(out)) out[g] = Math.round(out[g] * 2) / 2;
 	return out;
+}
+
+/**
+ * Everything a routine's volume has to confess, from the routine alone.
+ *
+ * Recomputed rather than stored, deliberately: a routine is editable, and a
+ * warning saved at generate time would go on insisting a muscle was neglected
+ * after you added the exercise that fixed it. This reads the routine in front
+ * of you.
+ *
+ * Only MAJOR_GROUPS are judged — traps and lower back have no target to miss.
+ */
+export interface VolumeWarning {
+	group: string;
+	/** `none` and `indirect` are both absences; `under`/`over` are amounts. */
+	kind: 'none' | 'indirect' | 'under' | 'over';
+	sets: number;
+	message: string;
+}
+
+export function volumeWarnings(draft: RoutineDraft, profile: Profile): VolumeWarning[] {
+	const out: VolumeWarning[] = [];
+	const volume = weeklySetsByGroup(draft);
+	const all = draft.sessions.flatMap((s) => s.exercises);
+
+	for (const group of MAJOR_GROUPS) {
+		const direct = all.some(
+			(pe) =>
+				pe.exercise.movement_pattern &&
+				pe.exercise.primary_muscles.some((m) => muscleGroup(m) === group)
+		);
+		const sets = volume[group] ?? 0;
+		if (!direct) {
+			out.push({
+				group,
+				kind: sets > 0 ? 'indirect' : 'none',
+				sets,
+				message:
+					sets > 0
+						? `${group} only gets indirect work (${sets} sets). Add another ${group} exercise if you want it trained directly.`
+						: `Nothing in this routine trains ${group}.`
+			});
+		} else if (sets < profile.weekly_sets_min) {
+			out.push({
+				group,
+				kind: 'under',
+				sets,
+				message: `${group} gets ${sets} sets a week, under the ${profile.weekly_sets_min} this profile aims for. Add another ${group} exercise or another training day.`
+			});
+		} else if (sets > profile.weekly_sets_max) {
+			out.push({
+				group,
+				kind: 'over',
+				sets,
+				message: `${group} gets ${sets} sets a week, over the ${profile.weekly_sets_max} this profile tops out at. Drop a ${group} exercise if the sessions feel long.`
+			});
+		}
+	}
+	return out;
+}
+
+/**
+ * One line standing in for the list.
+ *
+ * Eight near-identical sentences are honest and unreadable: the eye slides off
+ * a wall of yellow, and the one that matters is indistinguishable from the
+ * seven that follow the same template. The count is the part worth seeing
+ * first — eight groups short is a fact about the *split*, not about eight
+ * separate exercises you forgot.
+ */
+export function volumeSummary(warnings: VolumeWarning[], profile: Profile): string | null {
+	if (warnings.length === 0) return null;
+	const short = warnings.filter((w) => w.kind !== 'over').length;
+	const over = warnings.length - short;
+	const groups = (n: number) => `${n} muscle ${n === 1 ? 'group' : 'groups'}`;
+	if (short > 0 && over > 0) {
+		return `${groups(short)} short of ${profile.weekly_sets_min} sets a week, ${over} past ${profile.weekly_sets_max}.`;
+	}
+	if (short > 0) return `${groups(short)} short of ${profile.weekly_sets_min} sets a week.`;
+	return `${groups(over)} past ${profile.weekly_sets_max} sets a week.`;
 }
 
 /** One exercise's contribution to a window of real training. */
@@ -90,14 +226,7 @@ export function actualSetsByGroup(trained: TrainedExercise[]): Record<string, nu
 	const out: Record<string, number> = {};
 	for (const t of trained) {
 		if (!t.movement_pattern) continue;
-		for (const m of t.primary_muscles) {
-			const g = muscleGroup(m);
-			if (g) out[g] = (out[g] ?? 0) + t.sets;
-		}
-		for (const m of t.secondary_muscles) {
-			const g = muscleGroup(m);
-			if (g) out[g] = (out[g] ?? 0) + t.sets * 0.5;
-		}
+		creditExercise(out, t.primary_muscles, t.secondary_muscles, t.sets);
 	}
 	for (const g of Object.keys(out)) out[g] = Math.round(out[g] * 2) / 2;
 	return out;
