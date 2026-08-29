@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { enhance } from '$app/forms';
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 	import { isUnderTarget } from '$lib/training/volume';
@@ -53,7 +54,7 @@
 	const profile = $derived(data.profiles.find((p) => p.key === data.routine.profile_key));
 </script>
 
-<svelte:head><title>Plateload — {data.routine.name}</title></svelte:head>
+<svelte:head><title>{APP_NAME} — {data.routine.name}</title></svelte:head>
 
 <header class="head">
 	<form method="POST" action="?/rename" use:enhance={() => ({ update }) => update({ reset: false })}>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { enhance } from '$app/forms';
 	import { defaultSplitStyle, type Emphasis, type SplitStyle } from '$lib/training/generate';
 	import { isUnderTarget } from '$lib/training/volume';
@@ -54,7 +55,7 @@
 	];
 </script>
 
-<svelte:head><title>Plateload — generate</title></svelte:head>
+<svelte:head><title>{APP_NAME} — generate</title></svelte:head>
 
 <h1 class="display page-title">Generate a split</h1>
 <p class="hint">

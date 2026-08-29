@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { enhance } from '$app/forms';
 	import { onMount } from 'svelte';
 	import { outboxCount } from '$lib/client/session';
@@ -34,7 +35,7 @@
 	);
 </script>
 
-<svelte:head><title>Plateload — account</title></svelte:head>
+<svelte:head><title>{APP_NAME} — account</title></svelte:head>
 
 <h1 class="display page-title">Account</h1>
 

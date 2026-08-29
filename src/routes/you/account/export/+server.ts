@@ -1,4 +1,5 @@
 import type { RequestHandler } from './$types';
+import { APP_SLUG } from '$lib/brand';
 import { getDb } from '$lib/server/db';
 import { exportWorkouts } from '$lib/server/stats';
 
@@ -11,7 +12,7 @@ export const GET: RequestHandler = async ({ platform, locals }) => {
 			'content-type': 'application/json',
 			// Named and dated, because a file called "export" in a downloads
 			// folder is a file nobody can identify a year later.
-			'content-disposition': `attachment; filename="plateload-${stamp}.json"`
+			'content-disposition': `attachment; filename="-.json"`
 		}
 	});
 };

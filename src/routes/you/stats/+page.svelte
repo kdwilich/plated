@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import GuideLink from '$lib/components/GuideLink.svelte';
 	import { plateEquivalent } from '$lib/training/records';
 	import { DISPLAY_GROUPS, muscleGroup } from '$lib/training/volume';
@@ -76,7 +77,7 @@
 		new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 </script>
 
-<svelte:head><title>Plateload — stats</title></svelte:head>
+<svelte:head><title>{APP_NAME} — stats</title></svelte:head>
 
 <h1 class="display page-title">Stats</h1>
 

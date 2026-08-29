@@ -60,6 +60,10 @@ export interface ActiveSession {
 	};
 }
 
+// Deliberately NOT renamed with the app. This is the key an existing phone's
+// IndexedDB is filed under, and a rename orphans whatever session is in
+// progress on it — a set logged in a dead gym signal, gone. The name is
+// internal; nobody sees it. See docs/renaming-the-app.md.
 const DB_NAME = 'plateload';
 const DB_VERSION = 1;
 const ACTIVE = 'active_session';
@@ -121,6 +125,33 @@ export const saveActive = (session: ActiveSession): Promise<IDBValidKey> =>
 	tx(ACTIVE, 'readwrite', (s) => s.put(structuredCloneSafe(session), 'current'));
 
 export const clearActive = (): Promise<undefined> => tx(ACTIVE, 'readwrite', (s) => s.delete('current'));
+
+/**
+ * Whether a session holds work that replacing it would throw away. Warm-up
+ * sets count: they were typed in like any other. A session that was started
+ * and never touched holds nothing, so swapping to another one costs nothing
+ * and needs no ceremony.
+ */
+export function hasLoggedWork(session: ActiveSession | undefined): boolean {
+	if (!session || session.finished_at) return false;
+	return session.sets.length > 0 || (session.mobility_done?.length ?? 0) > 0 || !!session.notes?.trim();
+}
+
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+/**
+ * What that work is, in the order it was likely entered — so a warning about
+ * losing it says what is actually at stake instead of "unsaved changes".
+ * Empty string when there is nothing, which `hasLoggedWork` already answers.
+ */
+export function workSummary(session: ActiveSession): string {
+	const parts: string[] = [];
+	if (session.sets.length > 0) parts.push(plural(session.sets.length, 'set'));
+	const drills = session.mobility_done?.length ?? 0;
+	if (drills > 0) parts.push(plural(drills, 'warm-up drill'));
+	if (session.notes?.trim()) parts.push('a note');
+	return parts.join(', ');
+}
 
 // Svelte 5 $state proxies can't cross the structured-clone boundary.
 function structuredCloneSafe<T>(v: T): T {

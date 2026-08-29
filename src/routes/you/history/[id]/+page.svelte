@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	// A finished workout, and the ability to correct it. Editing does not write
 	// to the server directly: it rebuilds the sync payload and drops it in the
 	// same outbox a live session uses, because ingestWorkout replaces a
@@ -112,7 +113,7 @@
 	}
 </script>
 
-<svelte:head><title>Plateload — workout</title></svelte:head>
+<svelte:head><title>{APP_NAME} — workout</title></svelte:head>
 
 <header class="detail-head">
 	<div>

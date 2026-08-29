@@ -1,4 +1,4 @@
--- Plateload schema. D1 (sqlite). db.batch() is the transaction.
+-- Plated schema. D1 (sqlite). db.batch() is the transaction.
 
 CREATE TABLE IF NOT EXISTS exercise (
 	id TEXT PRIMARY KEY,

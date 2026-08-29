@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import Heatmap from '$lib/components/Heatmap.svelte';
 	import { bucketByLocalDay, currentStreak } from '$lib/training/streak';
 
@@ -18,7 +19,7 @@
 	}
 </script>
 
-<svelte:head><title>Plateload — you</title></svelte:head>
+<svelte:head><title>{APP_NAME} — you</title></svelte:head>
 
 <h1 class="display page-title">You</h1>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/brand';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import {
@@ -242,7 +243,7 @@
 	const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 </script>
 
-<svelte:head><title>Plateload — session</title></svelte:head>
+<svelte:head><title>{APP_NAME} — session</title></svelte:head>
 
 {#if session}
 	<header class="session-head">
