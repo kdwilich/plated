@@ -22,6 +22,31 @@ if (!existsSync(SRC)) {
 
 const exercises = JSON.parse(readFileSync(SRC, 'utf8'));
 
+// Rows the dataset does not have and the app needs. Emitted through the same
+// upsert as everything else so a re-seed is still safe. Ids are stable by
+// hand, not slugified, because workouts reference them.
+//
+// `run` is the one exercise every logged run points at, so records pool under
+// one id instead of fragmenting across the dataset's eleven cardio rows. No
+// movement_pattern on purpose: the generator cannot slot it, volume cannot
+// count it and recommendations cannot suggest it. A mile is not a leg set.
+const SYNTHETIC = [
+	{
+		id: 'run',
+		name: 'Run',
+		category: 'cardio',
+		equipment: null,
+		primaryMuscles: [],
+		secondaryMuscles: [],
+		mechanic: null,
+		level: null,
+		instructions: [],
+		images: [],
+		_aliases: ['Running', 'Jog'],
+		_cues: 'Distance and time. Surface, route and how it felt go in the note.'
+	}
+];
+
 // ---------------------------------------------------------------------------
 // Measurement + progression: rules over category / equipment / name.
 
@@ -238,7 +263,7 @@ const misses = Object.keys(OVERRIDES).filter((n) => !exercises.some((e) => e.nam
 const seen = new Set();
 let patterned = 0;
 
-for (const e of exercises) {
+for (const e of [...exercises, ...SYNTHETIC]) {
 	const id = e.id ? String(e.id) : slugify(e.name);
 	if (seen.has(id)) continue;
 	seen.add(id);
@@ -247,8 +272,8 @@ for (const e of exercises) {
 	const ov = OVERRIDES[e.name];
 	const pat = ov ? (pattern(e) ?? fallbackPattern(e)) : pattern(e);
 	const prio = ov ? ov.priority : basePriority(e, pat);
-	const aliases = ov?.aliases ?? [];
-	const cues = ov?.cues || null;
+	const aliases = ov?.aliases ?? e._aliases ?? [];
+	const cues = ov?.cues || e._cues || null;
 	const unilateral = /one-arm|one-leg|single-arm|single-leg|alternat|unilateral/i.test(e.name) ? 1 : 0;
 	const image = e.images?.[0] ?? null;
 	if (pat) patterned++;
