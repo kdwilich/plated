@@ -21,3 +21,8 @@ export function usesTime(measurement: string): boolean {
 export function allowsNegativeLoad(equipment: string | null, measurement: string): boolean {
 	return equipment === 'body only' && usesLoad(measurement);
 }
+
+/** The same predicate, named for what it means rather than what it permits:
+ *  records and progression ask "is this weight an offset?", the logger asks
+ *  "may this field go negative?". One rule, two questions. */
+export const isNetLoad = allowsNegativeLoad;

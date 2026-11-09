@@ -11,7 +11,17 @@ export interface RecordSet {
 	completed_at: string;
 }
 
-export type RecordKind = 'heaviest' | 'e1rm' | 'best_set' | 'most_reps' | 'longest' | 'furthest';
+export type RecordKind =
+	| 'heaviest'
+	| 'e1rm'
+	| 'best_set'
+	| 'most_reps'
+	| 'longest'
+	| 'furthest'
+	// Net-load only (pull-ups, dips): weight_lb is an offset from bodyweight.
+	| 'bw_reps'
+	| 'most_added'
+	| 'least_assist';
 
 export interface PersonalRecord {
 	kind: RecordKind;
@@ -39,18 +49,38 @@ const KINDS: Record<Measurement, RecordKind[]> = {
 	distance_time: ['furthest', 'longest']
 };
 
+/**
+ * A net-load exercise swaps Epley for records that mean something when the
+ * weight is an offset: a set at 0 lb is bodyweight, not nothing, and a 1RM
+ * estimated from "-40 lb" is not a number anyone can lift.
+ */
+const NET_LOAD_KINDS: RecordKind[] = ['bw_reps', 'most_added', 'least_assist'];
+
 const LABEL: Record<RecordKind, string> = {
 	heaviest: 'Heaviest',
 	e1rm: 'Est. 1RM',
 	best_set: 'Best set',
 	most_reps: 'Most reps',
 	longest: 'Longest',
-	furthest: 'Furthest'
+	furthest: 'Furthest',
+	bw_reps: 'Bodyweight reps',
+	most_added: 'Most added',
+	least_assist: 'Least assistance'
 };
+
+/** Kinds where a smaller value is the better set. */
+const LOWER_WINS = new Set<RecordKind>(['least_assist']);
 
 /** Null when the set cannot score this kind — a set with no weight has no 1RM. */
 function score(kind: RecordKind, s: RecordSet): number | null {
 	switch (kind) {
+		case 'bw_reps':
+			return (s.weight_lb ?? 0) === 0 ? s.reps : null;
+		case 'most_added':
+			return s.weight_lb != null && s.weight_lb > 0 ? s.weight_lb : null;
+		case 'least_assist':
+			// Assistance in pounds, so the value stays positive and displays as one.
+			return s.weight_lb != null && s.weight_lb < 0 ? -s.weight_lb : null;
 		case 'heaviest':
 			return s.weight_lb;
 		case 'e1rm':
@@ -69,7 +99,7 @@ function score(kind: RecordKind, s: RecordSet): number | null {
 }
 
 function beats(value: number, s: RecordSet, best: PersonalRecord): boolean {
-	if (value !== best.value) return value > best.value;
+	if (value !== best.value) return LOWER_WINS.has(best.kind) ? value < best.value : value > best.value;
 	// A tie belongs to whoever got there first: repeating a record is not
 	// setting one, and this also makes the result independent of input order.
 	return Date.parse(s.completed_at) < Date.parse(best.set.completed_at);
@@ -78,10 +108,17 @@ function beats(value: number, s: RecordSet, best: PersonalRecord): boolean {
 /**
  * The best set for each record the measurement offers. Absent, not zero, when
  * nothing logged can score it.
+ *
+ * @param netLoad The weight is an offset from bodyweight (see
+ *   measurement.ts isNetLoad), which replaces the loaded-lift records wholesale.
  */
-export function bestRecords(sets: RecordSet[], measurement: Measurement): PersonalRecord[] {
+export function bestRecords(
+	sets: RecordSet[],
+	measurement: Measurement,
+	netLoad = false
+): PersonalRecord[] {
 	const out: PersonalRecord[] = [];
-	for (const kind of KINDS[measurement]) {
+	for (const kind of netLoad ? NET_LOAD_KINDS : KINDS[measurement]) {
 		let best: PersonalRecord | null = null;
 		for (const s of sets) {
 			const value = score(kind, s);

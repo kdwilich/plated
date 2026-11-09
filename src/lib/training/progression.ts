@@ -5,6 +5,7 @@
 
 import type { GymConfig, LoggedSet, ProgressionKind } from './types.ts';
 import { smallestBarbellJump } from './plates.ts';
+import { usesLoad } from './measurement.ts';
 
 export interface Suggestion {
 	type: 'start' | 'add_load' | 'add_reps' | 'repeat' | 'deload' | 'beat_time';
@@ -21,9 +22,15 @@ export interface Suggestion {
  */
 export function incrementFor(
 	equipment: string | null,
+	measurement: string,
 	gym: GymConfig,
 	overrideLb?: number | null
 ): number {
+	// No load axis, no increment. A push-up and a pull-up are both 'body
+	// only'; only one of them has a weight field, and the measurement is what
+	// says which. Checked before the override so a routine cannot prescribe
+	// pounds on an exercise that has nowhere to put them.
+	if (!usesLoad(measurement)) return 0;
 	if (overrideLb != null && overrideLb > 0) return overrideLb;
 	switch (equipment) {
 		case 'barbell':

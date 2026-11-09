@@ -103,9 +103,12 @@ test('tonnage treats a bodyweight set as zero rather than as an error', async ()
 
 test('training days come back as raw timestamps for the browser to bucket', async () => {
 	const db = await seed(testDb());
-	await addWorkout(db, { id: 'w1', user: 1, started: '2026-03-01T18:00:00Z' });
+	// Relative to the clock: the window is measured from Date.now(), so a
+	// pinned date would age out of it and start failing on its own.
+	const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+	await addWorkout(db, { id: 'w1', user: 1, started: yesterday });
 	const days = await trainingDays(db, 1, 26);
-	assert.deepEqual(days, ['2026-03-01T18:00:00Z']);
+	assert.deepEqual(days, [yesterday]);
 });
 
 test('training days stop at the window edge', async () => {
@@ -184,4 +187,40 @@ test('the export carries workouts and their sets together', async () => {
 	assert.equal(out.workouts.length, 1);
 	assert.equal(out.workouts[0].sets.length, 1);
 	assert.equal(out.workouts[0].sets[0].weight_lb, 225);
+});
+
+test('a bodyweight pull-up has a headline record, and the row says it is net load', async () => {
+	// Epley on an offset from bodyweight is meaningless, and 0 lb is not
+	// "nothing". The page needs the equipment to know which it is looking at.
+	const db = testDb();
+	await db
+		.prepare(
+			`INSERT INTO exercise (id, name, measurement, movement_pattern, progression, equipment, primary_muscles, secondary_muscles)
+			 VALUES ('ex-pullup', 'Pullups', 'load_reps', 'vertical_pull', 'double', 'body only', '["lats"]', '[]')`
+		)
+		.run();
+	await db
+		.prepare(`INSERT INTO workout (id, started_at, finished_at, user_id) VALUES ('w1', ?, ?, 1)`)
+		.bind('2026-03-01T18:00:00Z', '2026-03-01T19:00:00Z')
+		.run();
+	const sets: [number, number][] = [
+		[-20, 10],
+		[0, 8]
+	];
+	let i = 0;
+	for (const [w, r] of sets) {
+		await db
+			.prepare(
+				`INSERT INTO workout_set (id, workout_id, exercise_id, position, weight_lb, reps, is_warmup, completed_at)
+				 VALUES (?, 'w1', 'ex-pullup', ?, ?, ?, 0, '2026-03-01T18:00:00Z')`
+			)
+			.bind(`s${i}`, i, w, r)
+			.run();
+		i++;
+	}
+	const recs = await headlineRecords(db, 1);
+	assert.equal(recs.length, 1);
+	assert.equal(recs[0].equipment, 'body only');
+	assert.equal(recs[0].weight_lb, 0, 'bodyweight beats assisted');
+	assert.equal(recs[0].reps, 8);
 });

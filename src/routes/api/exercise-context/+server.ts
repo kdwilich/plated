@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 		target_sets: 3,
 		rep_min: 8,
 		rep_max: 12,
-		increment_lb: incrementFor(ex.equipment, gym),
+		increment_lb: incrementFor(ex.equipment, ex.measurement, gym),
 		bar_lb: defaultBar?.weight_lb ?? 45,
 		history: history[id] ?? []
 	});

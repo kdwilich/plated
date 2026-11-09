@@ -13,7 +13,10 @@ import {
 	type SyncPayload
 } from './workouts.ts';
 
-const NOW = '2026-08-16T12:00:00.000Z';
+// An hour ago, not a pinned date: recentTrainedMuscles measures its window
+// from Date.now(), so a fixed timestamp would age out of it and the test
+// would start failing with no code change.
+const NOW = new Date(Date.now() - 3_600_000).toISOString();
 
 function payload(id: string, exerciseId = 'ex1', sessionId: string | null = null): SyncPayload {
 	return {

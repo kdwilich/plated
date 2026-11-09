@@ -49,16 +49,29 @@
 				return fmtDuration(r.value);
 			case 'furthest':
 				return `${fmt(r.value)} m`;
+			case 'bw_reps':
+				return `${r.value} reps`;
+			case 'most_added':
+				return `+${fmt(r.value)} lb`;
+			case 'least_assist':
+				return `−${fmt(r.value)} lb`;
 		}
 	}
+
+	// On a net-load lift the weight is an offset from bodyweight, so a bare
+	// "0 × 12" reads as an empty bar. Spell out what the number means.
+	const NET_LOAD_KINDS = new Set<PersonalRecord['kind']>(['bw_reps', 'most_added', 'least_assist']);
+	const netWeight = (w: number) => (w === 0 ? 'BW' : w > 0 ? `+${fmt(w)}` : `−${fmt(-w)}`);
 
 	/** The set behind the number. An estimate with nothing beside it invites
 	 *  more trust than the formula has earned. */
 	function recordSet(r: PersonalRecord): string {
 		const s = r.set;
 		const parts: string[] = [];
-		if (s.weight_lb != null && s.reps != null) parts.push(`${fmt(s.weight_lb)} × ${s.reps}`);
-		else if (s.reps != null) parts.push(`× ${s.reps}`);
+		if (s.weight_lb != null && s.reps != null) {
+			const w = NET_LOAD_KINDS.has(r.kind) ? netWeight(s.weight_lb) : fmt(s.weight_lb);
+			parts.push(`${w} × ${s.reps}`);
+		} else if (s.reps != null) parts.push(`× ${s.reps}`);
 		if (s.duration_s != null && r.kind !== 'longest') parts.push(fmtDuration(s.duration_s));
 		parts.push(
 			new Date(s.completed_at).toLocaleDateString(undefined, {

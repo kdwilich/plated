@@ -22,12 +22,24 @@ const set = (weight: number, reps: number): LoggedSet => ({
 });
 
 test('increment is equipment-aware', () => {
-	assert.equal(incrementFor('barbell', GYM), 5); // 2 x 2.5
-	assert.equal(incrementFor('dumbbell', GYM), 5);
-	assert.equal(incrementFor('machine', GYM), 10);
+	assert.equal(incrementFor('barbell', 'load_reps', GYM), 5); // 2 x 2.5
+	assert.equal(incrementFor('dumbbell', 'load_reps', GYM), 5);
+	assert.equal(incrementFor('machine', 'load_reps', GYM), 10);
 	// Assisted/added bodyweight work (pull-ups, dips) moves in stack-sized steps.
-	assert.equal(incrementFor('body only', GYM), 10);
-	assert.equal(incrementFor('machine', GYM, 2.5), 2.5); // override wins
+	assert.equal(incrementFor('body only', 'load_reps', GYM), 10);
+	assert.equal(incrementFor('machine', 'load_reps', GYM, 2.5), 2.5); // override wins
+});
+
+test('an exercise with no load axis has no increment, whatever the equipment', () => {
+	// A push-up is 'body only' like a pull-up, but it is reps_only: there is
+	// no weight field to add ten pounds to. Returning the stack step here is
+	// what told the logger to prescribe +10 lb on push-ups.
+	assert.equal(incrementFor('body only', 'reps_only', GYM), 0);
+	assert.equal(incrementFor('body only', 'time', GYM), 0);
+	// Even a plate-loaded exercise, if it is measured by time alone.
+	assert.equal(incrementFor('dumbbell', 'time', GYM), 0);
+	// And the override does not sneak a load axis in.
+	assert.equal(incrementFor('body only', 'reps_only', GYM, 2.5), 0);
 });
 
 test('no history -> start', () => {

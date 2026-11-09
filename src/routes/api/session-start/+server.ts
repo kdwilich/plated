@@ -49,7 +49,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			target_sets: e.target_sets,
 			rep_min: e.rep_min,
 			rep_max: e.rep_max,
-			increment_lb: incrementFor(e.equipment, gym, e.override_lb),
+			increment_lb: incrementFor(e.equipment, e.measurement, gym, e.override_lb),
 			bar_lb: gym.bars.find((b) => b.id === e.bar_id)?.weight_lb ?? defaultBar?.weight_lb ?? 45
 		}));
 	}

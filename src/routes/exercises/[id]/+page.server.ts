@@ -4,6 +4,7 @@ import { getDb } from '$lib/server/db';
 import { getExercise } from '$lib/server/catalog';
 import { exerciseSets, lastPerformances } from '$lib/server/workouts';
 import { bestRecords } from '$lib/training/records';
+import { isNetLoad } from '$lib/training/measurement';
 
 export const load: PageServerLoad = async ({ params, platform, locals }) => {
 	const db = getDb(platform);
@@ -17,6 +18,10 @@ export const load: PageServerLoad = async ({ params, platform, locals }) => {
 	return {
 		exercise,
 		history: history[params.id] ?? [],
-		records: bestRecords(sets, exercise.measurement)
+		records: bestRecords(
+			sets,
+			exercise.measurement,
+			isNetLoad(exercise.equipment, exercise.measurement)
+		)
 	};
 };

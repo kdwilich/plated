@@ -127,3 +127,49 @@ test('tonnage converts to forty-fives', () => {
 	assert.equal(plateEquivalent(45_000), 1000);
 	assert.equal(plateEquivalent(0), 0);
 });
+
+// Net-load exercises: pull-ups, chin-ups, dips. weight_lb is an offset from
+// bodyweight, so Epley on it is meaningless and a set at 0 lb is not nothing.
+
+test('a bodyweight pull-up holds a record for reps at bodyweight, not an estimate', () => {
+	const recs = bestRecords(
+		[set({ weight_lb: 0, reps: 12, completed_at: '2026-03-04T18:00:00Z' })],
+		'load_reps',
+		true
+	);
+	assert.deepEqual(
+		recs.map((r) => r.kind),
+		['bw_reps']
+	);
+	assert.equal(recs[0].value, 12);
+});
+
+test('net-load records are bodyweight reps, most added and least assistance', () => {
+	const recs = bestRecords(
+		[
+			set({ weight_lb: -40, reps: 8, completed_at: '2026-03-01T18:00:00Z' }),
+			set({ weight_lb: -20, reps: 6, completed_at: '2026-03-08T18:00:00Z' }),
+			set({ weight_lb: 0, reps: 10, completed_at: '2026-03-15T18:00:00Z' }),
+			set({ weight_lb: 25, reps: 3, completed_at: '2026-03-22T18:00:00Z' })
+		],
+		'load_reps',
+		true
+	);
+	const by = Object.fromEntries(recs.map((r) => [r.kind, r]));
+	assert.deepEqual(Object.keys(by).sort(), ['bw_reps', 'least_assist', 'most_added']);
+	assert.equal(by.bw_reps.set.reps, 10);
+	assert.equal(by.most_added.value, 25);
+	// Less assistance is the better set: -20 beats -40. The value is the
+	// assistance in pounds, so it displays as a positive number.
+	assert.equal(by.least_assist.value, 20);
+	assert.equal(by.least_assist.set.weight_lb, -20);
+});
+
+test('a net-load exercise never gets an Epley estimate', () => {
+	const recs = bestRecords(
+		[set({ weight_lb: 45, reps: 5, completed_at: '2026-03-04T18:00:00Z' })],
+		'load_reps',
+		true
+	);
+	assert.ok(!recs.some((r) => r.kind === 'e1rm' || r.kind === 'heaviest'));
+});

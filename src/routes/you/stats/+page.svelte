@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/brand';
 	import GuideLink from '$lib/components/GuideLink.svelte';
+	import { isNetLoad } from '$lib/training/measurement';
 	import { plateEquivalent } from '$lib/training/records';
 	import { DISPLAY_GROUPS, muscleGroup } from '$lib/training/volume';
 	import type { HeadlineRecord } from '$lib/server/stats';
@@ -33,11 +34,14 @@
 		}
 		// Loaded lifts rank against each other by estimate. A dead hang and a
 		// squat share no scale, so the rest follow by recency instead of being
-		// forced onto one.
+		// forced onto one. A bodyweight pull-up is not on the Epley scale either:
+		// its weight is an offset, so it sorts with the unloaded by recency.
+		const onEpley = (r: HeadlineRecord) =>
+			LOADED.has(r.measurement) && !isNetLoad(r.equipment, r.measurement);
 		for (const list of Object.values(out)) {
 			list.sort((a, b) => {
-				const al = LOADED.has(a.measurement);
-				const bl = LOADED.has(b.measurement);
+				const al = onEpley(a);
+				const bl = onEpley(b);
 				if (al !== bl) return al ? -1 : 1;
 				if (al) return b.best - a.best;
 				return Date.parse(b.completed_at) - Date.parse(a.completed_at);
@@ -56,9 +60,14 @@
 		return m > 0 ? `${m}:${String(rem).padStart(2, '0')}` : `${rem}s`;
 	}
 
+	// Net load: 0 is bodyweight, negative is assistance. `best` is a rank key
+	// there, not an estimate, so it is never printed.
+	const netWeight = (w: number) => (w === 0 ? 'BW' : w > 0 ? `+${fmt(w)}` : `−${fmt(-w)}`);
+
 	function headline(r: HeadlineRecord): string {
 		switch (r.measurement) {
 			case 'load_reps':
+				if (isNetLoad(r.equipment, r.measurement)) return `${netWeight(r.weight_lb ?? 0)} × ${r.reps}`;
 				return `${fmt(r.weight_lb ?? 0)} × ${r.reps} · ${Math.round(r.best)} est.`;
 			case 'load_time':
 				return `${fmt(r.weight_lb ?? 0)} lb`;

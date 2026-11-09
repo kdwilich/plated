@@ -92,9 +92,12 @@ export interface HeadlineRecord {
 	exercise_id: string;
 	name: string;
 	measurement: string;
+	/** With the measurement, says whether weight_lb is an offset from bodyweight. */
+	equipment: string | null;
 	movement_pattern: string | null;
 	primary_muscles: string[];
-	/** The single number this measurement is ranked by. */
+	/** The single number this measurement is ranked by. For a net-load exercise
+	 *  it is a rank key, not an estimate: never print it. */
 	best: number;
 	weight_lb: number | null;
 	reps: number | null;
@@ -116,9 +119,13 @@ export interface HeadlineRecord {
 export async function headlineRecords(db: D1Database, userId: number): Promise<HeadlineRecord[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT ws.exercise_id, e.name, e.measurement, e.movement_pattern, e.primary_muscles,
+			`SELECT ws.exercise_id, e.name, e.measurement, e.equipment, e.movement_pattern, e.primary_muscles,
 			        MAX(CASE e.measurement
-			              WHEN 'load_reps'     THEN ws.weight_lb * (1 + ws.reps / 30.0)
+			              -- Net load (pull-ups, dips): Epley on an offset is meaningless.
+			              -- Rank by added weight first, reps second; 0 lb is bodyweight.
+			              WHEN 'load_reps'     THEN CASE WHEN e.equipment = 'body only'
+			                                            THEN ws.weight_lb * 1000 + ws.reps
+			                                            ELSE ws.weight_lb * (1 + ws.reps / 30.0) END
 			              WHEN 'load_time'     THEN ws.weight_lb
 			              WHEN 'reps_only'     THEN ws.reps
 			              WHEN 'time'          THEN ws.duration_s
