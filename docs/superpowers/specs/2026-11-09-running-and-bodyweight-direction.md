@@ -1,6 +1,6 @@
 # Running, bodyweight, and what the app is
 
-**Status:** direction accepted 2026-11-09. Plated stays (§1). Slice 0 done, slice 1 next.
+**Status:** direction accepted 2026-11-09. Plated stays (§1). Slices 0 and 1 done on `feat/log-a-run`; slice 2 (Garmin pull) is optional and decided after a couple of weeks of manual entry.
 **Date:** 2026-11-09
 
 Three independent delegates (Claude Opus 5.5, Muse Wonder Full 1.0, GPT-6.1
@@ -362,7 +362,7 @@ Each slice is one spec, one plan, TDD, useful on its own.
 | # | Slice | Size | What it buys |
 |---|---|---|---|
 | 0 | **Truth pass.** *Done 2026-11-09.* Clock-relative test fixtures. `incrementFor` takes the measurement and returns 0 without a load axis. Net-load records are bodyweight reps, most added, least assistance, in the pure module and the headline query, with the guide and stats page showing `BW × 12` instead of `0 × 12 · 0 est.`. `wrangler.toml` `name` back to `plateload`. | S | Bodyweight logging stops lying. The suite is green before any mileage test inherits the date bomb. The origin cannot move by accident. |
-| 1 | **Log a run.** Migration 0002. Synthetic `Run`. `usesDistance` plus inputs in logger and editor. `/run` form via the outbox. `running.ts` pace. History rows render `3.10 mi · 24:30 · 7:54/mi`. Week strip on Train. | M | What the user does most, in history, heatmap, streak and export. Validates run-as-workout before anything builds on it. |
+| 1 | **Log a run.** *Done 2026-11-09, `feat/log-a-run`.* Migration 0002. Synthetic `Run`. `usesDistance` plus inputs in logger and editor. `/run` form via the outbox. `running.ts` pace. History rows render `3.10 mi · 24:30 · 7:54/mi`. Week strip on Train. | M | What the user does most, in history, heatmap, streak and export. Validates run-as-workout before anything builds on it. |
 | 2 | **Garmin pull.** *Optional, decided after slice 1.* `garmin_account` table (0003) holding the pasted key and expiry; a key field under account; Pull from Garmin on Train; `training/garmin.ts` mapping with real-response fixtures; laps as sets when `lapCount > 1`. | S–M | Every run on the watch lands in the log without typing. No OAuth, one key, two GET calls. |
 | 3 | **Run insight.** Weekly and 12-week mileage, spike cap, standard-distance PRs, Running card on stats, miles in lifetime totals. | S–M | The log becomes something to read, over real history rather than a few hand-typed runs. |
 | 4 | **Bodyweight foundations.** Seed squat fix. `requires_bar` (0004) and the `pull-up bar` gym key. Gym presets and plateless save. Synthetic staples. | M | A floor or bar gym generates a real week; pull-ups hold PRs. |

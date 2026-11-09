@@ -128,7 +128,7 @@
 				day: 'numeric',
 				hour: 'numeric',
 				minute: '2-digit'
-			})}{#if workout.effort != null} · effort {workout.effort}{/if}
+			})}{#if workout.effort != null}&nbsp;· effort {workout.effort}{/if}
 		</p>
 	</div>
 	<button

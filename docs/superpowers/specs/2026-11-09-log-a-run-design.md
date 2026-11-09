@@ -1,6 +1,6 @@
 # Log a run
 
-**Status:** approved direction (see `2026-11-09-running-and-bodyweight-direction.md` §2), not yet implemented
+**Status:** implemented 2026-11-09 on `feat/log-a-run` (see `2026-11-09-running-and-bodyweight-direction.md` §2)
 **Date:** 2026-11-09
 
 ## Problem
