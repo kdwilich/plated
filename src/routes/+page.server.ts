@@ -1,13 +1,15 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
 import { getActiveRoutine } from '$lib/server/routines';
-import { lastCompletedPosition, recentTrainedMuscles } from '$lib/server/workouts';
+import { lastCompletedPosition, recentActivity, recentTrainedMuscles } from '$lib/server/workouts';
 import { muscleGroup, nextPosition, stalenessByGroup } from '$lib/training/volume';
 
 export const load: PageServerLoad = async ({ platform, locals }) => {
 	const db = getDb(platform);
 	const uid = locals.user!.id;
-	const routine = await getActiveRoutine(db, uid);
+	// The week strip does not depend on a routine: a runner with no split
+	// still has a week.
+	const [routine, activity] = await Promise.all([getActiveRoutine(db, uid), recentActivity(db, uid)]);
 
 	let next: number | null = null;
 	let staleness: Record<string, number> = {};
@@ -55,6 +57,7 @@ export const load: PageServerLoad = async ({ platform, locals }) => {
 				}
 			: null,
 		next,
-		staleness
+		staleness,
+		activity
 	};
 };

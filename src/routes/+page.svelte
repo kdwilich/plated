@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { hasLoggedWork, loadActive, saveActive, workSummary, type ActiveSession } from '$lib/client/session';
+	import { weekSoFar } from '$lib/training/running';
 
 	let { data } = $props();
 
@@ -11,6 +12,18 @@
 	// A session picked while another one is live and holds work. It waits here
 	// until the warning is answered, because starting it destroys the live one.
 	let pending = $state.raw<{ id: string | null; name: string } | null>(null);
+
+	// Bucketed here, not on the server: the browser is the only party that
+	// knows what day the runner thinks it is. Same rule as the heatmap.
+	const week = $derived(weekSoFar(data.activity, new Date()));
+	const weekLine = $derived.by(() => {
+		const parts: string[] = [];
+		if (week.lifts > 0) parts.push(`${week.lifts} lift${week.lifts === 1 ? '' : 's'}`);
+		// Miles when there are any; a run logged without a distance still counts.
+		if (week.miles > 0) parts.push(`${week.miles.toFixed(1)} mi`);
+		else if (week.runs > 0) parts.push(`${week.runs} run${week.runs === 1 ? '' : 's'}`);
+		return parts.join(' · ');
+	});
 
 	onMount(async () => {
 		resumable = await loadActive(data.user?.id);
@@ -60,6 +73,10 @@
 
 <svelte:head><title>{APP_NAME}</title></svelte:head>
 
+{#if weekLine}
+	<p class="week label">This week · <span class="num">{weekLine}</span></p>
+{/if}
+
 {#if resumable && !resumable.finished_at}
 	<a class="resume card" href="/workout">
 		<span class="label">Session in progress</span>
@@ -94,7 +111,10 @@
 	</div>
 {/if}
 
-<button class="btn freestyle" onclick={() => choose(null, 'Freestyle')} disabled={starting}>Start freestyle session</button>
+<div class="freestyle-row">
+	<button class="btn freestyle" onclick={() => choose(null, 'Freestyle')} disabled={starting}>Start freestyle session</button>
+	<a class="btn freestyle" href="/run">Log a run</a>
+</div>
 
 {#if pending && resumable}
 	{@const next = pending}
@@ -129,6 +149,10 @@
 	.hint {
 		font-size: 13px;
 		color: $text-dim;
+	}
+
+	.week {
+		margin: 0 0 $space-3;
 	}
 
 	.routine-label {
@@ -198,9 +222,15 @@
 		}
 	}
 
+	.freestyle-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: $space-3;
+		margin-top: $space-4;
+	}
+
 	.freestyle {
 		width: 100%;
-		margin-top: $space-4;
 	}
 
 	// Sits above everything on this screen. Centred rather than a bottom sheet
