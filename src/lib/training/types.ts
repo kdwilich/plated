@@ -66,6 +66,8 @@ export interface LoggedSet {
 	weight_lb: number | null;
 	reps: number | null;
 	duration_s: number | null;
+	/** Optional: sessions stored before distance was read back lack it. */
+	distance_m?: number | null;
 	is_warmup: boolean;
 }
 

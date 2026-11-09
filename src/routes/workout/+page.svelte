@@ -22,6 +22,7 @@
 	import GuideLink from '$lib/components/GuideLink.svelte';
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 	import * as measures from '$lib/training/measurement';
+	import { runLine, metres } from '$lib/training/running';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
 	// This route has no loader of its own; `data` is the layout's, and `user`
@@ -52,6 +53,7 @@
 	let weightInput = $state<Record<string, number>>({});
 	let repsInput = $state<Record<string, number>>({});
 	let durationInput = $state<Record<string, number>>({});
+	let milesInput = $state<Record<string, number>>({});
 
 	onMount(() => {
 		void (async () => {
@@ -95,6 +97,9 @@
 	function lastLine(ex: ActiveExercise): string | null {
 		const last = ex.history[0]?.filter((s) => !s.is_warmup);
 		if (!last?.length) return null;
+		if (usesDistance(ex)) {
+			return `LAST · ${last.map((s) => runLine(s.distance_m ?? null, s.duration_s)).join(', ')}`;
+		}
 		if (ex.measurement === 'time' || ex.measurement === 'load_time') {
 			return `LAST · ${last.map((s) => `${s.duration_s ?? 0}s`).join(', ')}`;
 		}
@@ -124,6 +129,7 @@
 	const usesLoad = (ex: ActiveExercise) => measures.usesLoad(ex.measurement);
 	const usesReps = (ex: ActiveExercise) => measures.usesReps(ex.measurement);
 	const usesTime = (ex: ActiveExercise) => measures.usesTime(ex.measurement);
+	const usesDistance = (ex: ActiveExercise) => measures.usesDistance(ex.measurement);
 	const isBarbell = (ex: ActiveExercise) => ex.equipment === 'barbell' || ex.equipment === 'e-z curl bar';
 	const allowsNegativeLoad = (ex: ActiveExercise) =>
 		measures.allowsNegativeLoad(ex.equipment, ex.measurement);
@@ -155,7 +161,7 @@
 			weight_lb: usesLoad(ex) || presetWeight !== undefined ? (presetWeight ?? weightInput[ex.exercise_id] ?? null) : null,
 			reps: usesReps(ex) || presetReps !== undefined ? (presetReps ?? repsInput[ex.exercise_id] ?? null) : null,
 			duration_s: usesTime(ex) ? (durationInput[ex.exercise_id] ?? null) : null,
-			distance_m: null,
+			distance_m: usesDistance(ex) && milesInput[ex.exercise_id] ? Math.round(metres(milesInput[ex.exercise_id])) : null,
 			rir: null,
 			is_warmup: warmup,
 			completed_at: new Date().toISOString()
@@ -193,6 +199,7 @@
 		delete weightInput[id];
 		delete repsInput[id];
 		delete durationInput[id];
+		delete milesInput[id];
 	}
 
 	// Only ever reachable at zero logged sets, so session.sets needs no cleanup.
@@ -380,6 +387,12 @@
 								<input class="num" type="number" inputmode="numeric" min="0" bind:value={repsInput[ex.exercise_id]} />
 							</label>
 						{/if}
+						{#if usesDistance(ex)}
+							<label class="field">
+								<span class="label">Miles</span>
+								<input class="num" type="number" inputmode="decimal" step="0.01" min="0" bind:value={milesInput[ex.exercise_id]} />
+							</label>
+						{/if}
 						{#if usesTime(ex)}
 							<label class="field">
 								<span class="label">Seconds</span>
@@ -395,9 +408,13 @@
 								<li class="hairline-row">
 									<span class="num set-label">{s.is_warmup ? 'W' : `SET ${logged.slice(0, i + 1).filter((x) => !x.is_warmup).length}`}</span>
 									<span class="num set-value">
-										{#if s.weight_lb != null}{loadLabel(ex, s.weight_lb)}{/if}
-										{#if s.reps != null}&nbsp;× {s.reps}{/if}
-										{#if s.duration_s != null}&nbsp;{s.duration_s}s{/if}
+										{#if usesDistance(ex)}
+											{runLine(s.distance_m, s.duration_s)}
+										{:else}
+											{#if s.weight_lb != null}{loadLabel(ex, s.weight_lb)}{/if}
+											{#if s.reps != null}&nbsp;× {s.reps}{/if}
+											{#if s.duration_s != null}&nbsp;{s.duration_s}s{/if}
+										{/if}
 									</span>
 									<button class="undo" onclick={() => undoSet(s.id)} aria-label="Remove set">×</button>
 								</li>

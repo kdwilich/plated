@@ -118,7 +118,7 @@ export async function lastPerformances(
 	const marks = exerciseIds.map(() => '?').join(',');
 	const { results } = await db
 		.prepare(
-			`SELECT ws.exercise_id, ws.workout_id, ws.weight_lb, ws.reps, ws.duration_s, ws.is_warmup, ws.completed_at, ws.position
+			`SELECT ws.exercise_id, ws.workout_id, ws.weight_lb, ws.reps, ws.duration_s, ws.distance_m, ws.is_warmup, ws.completed_at, ws.position
 			 FROM workout_set ws
 			 JOIN workout w ON w.id = ws.workout_id
 			 WHERE ws.exercise_id IN (${marks}) AND w.finished_at IS NOT NULL AND w.user_id = ?
@@ -145,6 +145,7 @@ export async function lastPerformances(
 			weight_lb: r.weight_lb as number | null,
 			reps: r.reps as number | null,
 			duration_s: r.duration_s as number | null,
+			distance_m: (r.distance_m as number | null) ?? null,
 			is_warmup: !!r.is_warmup
 		});
 	}

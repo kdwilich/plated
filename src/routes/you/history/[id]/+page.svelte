@@ -9,7 +9,8 @@
 	import ExercisePicker from '$lib/components/ExercisePicker.svelte';
 	import { drainOutbox, enqueue } from '$lib/client/session';
 	import { newSet, payloadFromEdits, toEditable, type EditableSet, type HistoryWorkout } from '$lib/client/edit';
-	import { allowsNegativeLoad, usesLoad, usesReps, usesTime } from '$lib/training/measurement';
+	import { allowsNegativeLoad, usesDistance, usesLoad, usesReps, usesTime } from '$lib/training/measurement';
+	import { runLine, metres, miles, runLabel, isRunType } from '$lib/training/running';
 	import type { ExerciseRow } from '$lib/server/catalog';
 
 	let { data } = $props();
@@ -117,7 +118,9 @@
 
 <header class="detail-head">
 	<div>
-		<h1 class="display page-title">{workout.session_name ?? 'Freestyle'}</h1>
+		<h1 class="display page-title">
+			{isRunType(workout.run_type) ? runLabel(workout.run_type) : (workout.session_name ?? 'Freestyle')}
+		</h1>
 		<p class="meta num">
 			{new Date(workout.started_at).toLocaleString(undefined, {
 				weekday: 'long',
@@ -125,7 +128,7 @@
 				day: 'numeric',
 				hour: 'numeric',
 				minute: '2-digit'
-			})}
+			})}{#if workout.effort != null} · effort {workout.effort}{/if}
 		</p>
 	</div>
 	<button
@@ -190,6 +193,11 @@
 							{#if usesReps(sets[i].measurement)}
 								<input class="num cell" type="number" inputmode="numeric" min="0" aria-label="Reps" bind:value={draft[i].reps} />
 							{/if}
+							{#if usesDistance(sets[i].measurement)}
+								<input class="num cell" type="number" inputmode="decimal" step="0.01" min="0" aria-label="Miles"
+									value={draft[i].distance_m == null ? '' : miles(draft[i].distance_m).toFixed(2)}
+									oninput={(e) => { const v = Number((e.currentTarget as HTMLInputElement).value); draft[i].distance_m = v > 0 ? Math.round(metres(v)) : null; }} />
+							{/if}
 							{#if usesTime(sets[i].measurement)}
 								<input class="num cell" type="number" inputmode="numeric" min="0" aria-label="Seconds" bind:value={draft[i].duration_s} />
 							{/if}
@@ -201,9 +209,13 @@
 						</div>
 					{:else}
 						<span class="num">
-							{#if sets[i].weight_lb != null}{loadLabel(sets[i])}{/if}
-							{#if sets[i].reps != null}&nbsp;× {sets[i].reps}{/if}
-							{#if sets[i].duration_s != null}&nbsp;{sets[i].duration_s}s{/if}
+							{#if usesDistance(sets[i].measurement)}
+								{runLine(sets[i].distance_m, sets[i].duration_s)}
+							{:else}
+								{#if sets[i].weight_lb != null}{loadLabel(sets[i])}{/if}
+								{#if sets[i].reps != null}&nbsp;× {sets[i].reps}{/if}
+								{#if sets[i].duration_s != null}&nbsp;{sets[i].duration_s}s{/if}
+							{/if}
 						</span>
 					{/if}
 				</li>
