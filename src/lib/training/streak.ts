@@ -21,7 +21,7 @@ export function bucketByLocalDay(timestamps: string[]): string[] {
 }
 
 /** Whole weeks since Monday 5 January 1970, the first Monday of the epoch. */
-function weekIndex(day: string): number {
+export function weekIndex(day: string): number {
 	const [y, m, d] = day.split('-').map(Number);
 	return Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(1970, 0, 5)) / (7 * 86_400_000));
 }

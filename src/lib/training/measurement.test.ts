@@ -1,16 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { allowsNegativeLoad, usesLoad, usesReps, usesTime } from './measurement.ts';
+import { allowsNegativeLoad, usesDistance, usesLoad, usesReps, usesTime } from './measurement.ts';
 
 // The five measurements the schema's CHECK constraint allows, and the inputs
 // each one earns. load_time is the awkward one: it takes both a weight and a
 // clock, so it must answer true to usesLoad AND usesTime.
-const TABLE: Record<string, { load: boolean; reps: boolean; time: boolean }> = {
-	load_reps: { load: true, reps: true, time: false },
-	reps_only: { load: false, reps: true, time: false },
-	time: { load: false, reps: false, time: true },
-	load_time: { load: true, reps: false, time: true },
-	distance_time: { load: false, reps: false, time: true }
+const TABLE: Record<string, { load: boolean; reps: boolean; time: boolean; distance: boolean }> = {
+	load_reps: { load: true, reps: true, time: false, distance: false },
+	reps_only: { load: false, reps: true, time: false, distance: false },
+	time: { load: false, reps: false, time: true, distance: false },
+	load_time: { load: true, reps: false, time: true, distance: false },
+	distance_time: { load: false, reps: false, time: true, distance: true }
 };
 
 test('every measurement gets the right inputs', () => {
@@ -18,6 +18,7 @@ test('every measurement gets the right inputs', () => {
 		assert.equal(usesLoad(m), want.load, `${m} usesLoad`);
 		assert.equal(usesReps(m), want.reps, `${m} usesReps`);
 		assert.equal(usesTime(m), want.time, `${m} usesTime`);
+		assert.equal(usesDistance(m), want.distance, `${m} usesDistance`);
 	}
 });
 

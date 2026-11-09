@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketByLocalDay, currentStreak, localDay } from './streak.ts';
+import { bucketByLocalDay, currentStreak, localDay, weekIndex } from './streak.ts';
 
 /** An independent oracle. en-CA renders YYYY-MM-DD, and it goes through a
  *  different code path than the implementation, so a naive `iso.slice(0, 10)`
@@ -66,4 +66,11 @@ test('a week is Monday to Sunday', () => {
 	// who trained on both has a two-week streak, not a one-week one.
 	const today = new Date(2026, 2, 5);
 	assert.equal(currentStreak(['2026-03-01', '2026-03-02'], today), 2);
+});
+
+test('weeks start on Monday: a Sunday and the Monday after it are different weeks', () => {
+	// 2026-11-08 is a Sunday, 2026-11-09 a Monday.
+	assert.equal(weekIndex('2026-11-09') - weekIndex('2026-11-08'), 1);
+	// And Monday through Sunday share one.
+	assert.equal(weekIndex('2026-11-15'), weekIndex('2026-11-09'));
 });

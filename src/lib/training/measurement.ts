@@ -14,6 +14,10 @@ export function usesTime(measurement: string): boolean {
 	return measurement === 'time' || measurement === 'load_time' || measurement === 'distance_time';
 }
 
+export function usesDistance(measurement: string): boolean {
+	return measurement === 'distance_time';
+}
+
 /**
  * Pull-ups, chin-ups, dips: weight_lb is a net offset from bodyweight — 0 is
  * bodyweight only, negative is assisted, positive is added.
