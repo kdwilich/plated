@@ -7,6 +7,7 @@ import {
 	ingestWorkout,
 	lastCompletedPosition,
 	lastPerformances,
+	recentActivity,
 	recentTrainedMuscles,
 	recentWorkouts,
 	runFieldsValid,
@@ -343,4 +344,56 @@ test('the sync endpoint can refuse what the schema cannot', () => {
 	assert.equal(runFieldsValid({ ...w, effort: 11 }), false);
 	assert.equal(runFieldsValid({ ...w, effort: 0 }), false);
 	assert.equal(runFieldsValid({ ...w, effort: 6.5 }), false);
+});
+
+test('recentWorkouts says which rows are runs and how far they went', async () => {
+	const db = testDb();
+	await seedExercise(db, 'run');
+	const p = payload('r1', 'run');
+	p.workout.run_type = 'easy';
+	p.sets[0] = { ...p.sets[0], weight_lb: null, reps: null, duration_s: 1470, distance_m: 5000 };
+	// A second set, as an interval session will have, sums.
+	p.sets.push({ ...p.sets[0], id: 'r1-s2', position: 1, distance_m: 400, duration_s: 90, is_warmup: true });
+	await ingestWorkout(db, 1, p);
+	const [row] = await recentWorkouts(db, 1);
+	assert.equal(row.run_type, 'easy');
+	assert.equal(row.total_distance_m, 5400);
+});
+
+test('a strength workout has no run_type and zero distance in the list', async () => {
+	const db = testDb();
+	await seedExercise(db);
+	await ingestWorkout(db, 1, payload('w1'));
+	const [row] = await recentWorkouts(db, 1);
+	assert.equal(row.run_type, null);
+	assert.equal(row.total_distance_m, 0);
+});
+
+test('recentActivity returns finished workouts in the window, yours only', async () => {
+	const db = testDb();
+	await seedExercise(db);
+	await seedExercise(db, 'run');
+	await ingestWorkout(db, 1, payload('w1'));
+	const run = payload('r1', 'run');
+	run.workout.run_type = 'easy';
+	run.sets[0] = { ...run.sets[0], weight_lb: null, reps: null, duration_s: 1470, distance_m: 5000 };
+	await ingestWorkout(db, 1, run);
+	const old = payload('old');
+	old.workout.started_at = '2020-01-01T10:00:00.000Z';
+	old.workout.finished_at = '2020-01-01T11:00:00.000Z';
+	await ingestWorkout(db, 1, old);
+	const open = payload('open');
+	open.workout.finished_at = null;
+	await ingestWorkout(db, 1, open);
+	await ingestWorkout(db, 2, payload('theirs'));
+
+	const rows = await recentActivity(db, 1, 8);
+	// Default sort is by string, and "," (the null row) sorts before "e".
+	assert.deepEqual(
+		rows.map((r) => [r.run_type, r.distance_m]).sort(),
+		[
+			[null, 0],
+			['easy', 5000]
+		]
+	);
 });

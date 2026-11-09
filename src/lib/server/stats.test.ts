@@ -224,3 +224,29 @@ test('a bodyweight pull-up has a headline record, and the row says it is net loa
 	assert.equal(recs[0].weight_lb, 0, 'bodyweight beats assisted');
 	assert.equal(recs[0].reps, 8);
 });
+
+test('a run is a workout but not a set', async () => {
+	// A mile is not a set, and neither is a treadmill mile inside a lift.
+	// The run still counts as a workout: it happened.
+	const db = await seed(testDb());
+	await db
+		.prepare(
+			`INSERT INTO exercise (id, name, measurement, progression, primary_muscles, secondary_muscles)
+			 VALUES ('run', 'Run', 'distance_time', 'none', '[]', '[]')`
+		)
+		.run();
+	await addWorkout(db, { id: 'w1', user: 1, started: '2026-03-01T18:00:00Z', sets: [{ weight: 225, reps: 5 }] });
+	await db
+		.prepare(`INSERT INTO workout (id, started_at, finished_at, run_type, user_id) VALUES ('r1', '2026-03-02T18:00:00Z', '2026-03-02T18:30:00Z', 'easy', 1)`)
+		.run();
+	await db
+		.prepare(
+			`INSERT INTO workout_set (id, workout_id, exercise_id, position, duration_s, distance_m, is_warmup, completed_at)
+			 VALUES ('r1-s1', 'r1', 'run', 0, 1470, 5000, 0, '2026-03-02T18:30:00Z')`
+		)
+		.run();
+	const t = await lifetimeTotals(db, 1);
+	assert.equal(t.workouts, 2);
+	assert.equal(t.sets, 1);
+	assert.equal(t.reps, 5);
+});

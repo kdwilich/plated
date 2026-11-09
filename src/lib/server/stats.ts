@@ -14,7 +14,8 @@ export interface LifetimeTotals {
 /**
  * Two queries rather than one join, so each number means what it says: a
  * workout that finished with nothing but warmups is still a workout, but it
- * contributed no sets.
+ * contributed no sets. A run is a workout, not a set, so distance sets are
+ * left out of the count too.
  */
 export async function lifetimeTotals(db: D1Database, userId: number): Promise<LifetimeTotals> {
 	const [w, s] = await db.batch([
@@ -30,7 +31,9 @@ export async function lifetimeTotals(db: D1Database, userId: number): Promise<Li
 				        COALESCE(SUM(COALESCE(ws.weight_lb, 0) * COALESCE(ws.reps, 0)), 0) AS volume_lb
 				 FROM workout_set ws
 				 JOIN workout w ON w.id = ws.workout_id
-				 WHERE w.user_id = ? AND w.finished_at IS NOT NULL AND ws.is_warmup = 0`
+				 JOIN exercise e ON e.id = ws.exercise_id
+				 WHERE w.user_id = ? AND w.finished_at IS NOT NULL AND ws.is_warmup = 0
+				   AND e.measurement <> 'distance_time'`
 			)
 			.bind(userId)
 	]);

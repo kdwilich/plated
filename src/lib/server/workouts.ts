@@ -202,6 +202,9 @@ export interface WorkoutSummary {
 	set_count: number;
 	exercise_count: number;
 	total_volume_lb: number;
+	run_type: string | null;
+	/** Every set's distance summed, warm-ups included: mileage is mileage. */
+	total_distance_m: number;
 }
 
 export async function recentWorkouts(
@@ -211,10 +214,11 @@ export async function recentWorkouts(
 ): Promise<WorkoutSummary[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT w.id, w.routine_session_id, rs.name AS session_name, w.started_at, w.finished_at,
+			`SELECT w.id, w.routine_session_id, rs.name AS session_name, w.started_at, w.finished_at, w.run_type,
 			        COUNT(ws.id) AS set_count,
 			        COUNT(DISTINCT ws.exercise_id) AS exercise_count,
-			        COALESCE(SUM(CASE WHEN ws.is_warmup = 0 THEN COALESCE(ws.weight_lb, 0) * COALESCE(ws.reps, 0) END), 0) AS total_volume_lb
+			        COALESCE(SUM(CASE WHEN ws.is_warmup = 0 THEN COALESCE(ws.weight_lb, 0) * COALESCE(ws.reps, 0) END), 0) AS total_volume_lb,
+			        COALESCE(SUM(ws.distance_m), 0) AS total_distance_m
 			 FROM workout w
 			 LEFT JOIN workout_set ws ON ws.workout_id = w.id
 			 LEFT JOIN routine_session rs ON rs.id = w.routine_session_id
@@ -224,6 +228,31 @@ export async function recentWorkouts(
 		.bind(userId, limit)
 		.all();
 	return results as unknown as WorkoutSummary[];
+}
+
+/**
+ * Finished workouts from the last `days` days with their run flag and summed
+ * distance, raw timestamps included. The browser buckets them into its local
+ * week (training/running.ts weekSoFar); eight days covers a Monday that was
+ * seven days ago plus a timezone's slack. Same reasoning as trainingDays.
+ */
+export async function recentActivity(
+	db: D1Database,
+	userId: number,
+	days = 8
+): Promise<{ started_at: string; run_type: string | null; distance_m: number }[]> {
+	const since = new Date(Date.now() - days * 86_400_000).toISOString();
+	const { results } = await db
+		.prepare(
+			`SELECT w.started_at, w.run_type, COALESCE(SUM(ws.distance_m), 0) AS distance_m
+			 FROM workout w
+			 LEFT JOIN workout_set ws ON ws.workout_id = w.id
+			 WHERE w.user_id = ? AND w.finished_at IS NOT NULL AND w.started_at >= ?
+			 GROUP BY w.id ORDER BY w.started_at`
+		)
+		.bind(userId, since)
+		.all<{ started_at: string; run_type: string | null; distance_m: number }>();
+	return results;
 }
 
 export async function workoutDetail(db: D1Database, userId: number, id: string) {
