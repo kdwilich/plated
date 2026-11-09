@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/brand';
 	import { enhance } from '$app/forms';
+	import { isRunType, runLabel, runLine } from '$lib/training/running';
 
 	let { data } = $props();
 
@@ -49,13 +50,17 @@
 		<li class="entry">
 			<a class="card row" class:shrunk={editing} href="/you/history/{w.id}">
 				<span class="row-main">
-					<span class="row-name">{w.session_name ?? 'Freestyle'}</span>
+					<span class="row-name">{isRunType(w.run_type) ? runLabel(w.run_type) : (w.session_name ?? 'Freestyle')}</span>
 					<span class="row-date num">{fmtDate(w.started_at)} · {duration(w.started_at, w.finished_at)}</span>
 				</span>
 				<span class="row-stats num">
-					{w.set_count} sets
-					{#if w.total_volume_lb > 0}
-						· {Math.round(w.total_volume_lb).toLocaleString()} lb
+					{#if isRunType(w.run_type)}
+						{runLine(w.total_distance_m, w.finished_at ? Math.round((Date.parse(w.finished_at) - Date.parse(w.started_at)) / 1000) : null)}
+					{:else}
+						{w.set_count} sets
+						{#if w.total_volume_lb > 0}
+							· {Math.round(w.total_volume_lb).toLocaleString()} lb
+						{/if}
 					{/if}
 				</span>
 			</a>
@@ -75,7 +80,7 @@
 					</form>
 					<button class="side-btn" onclick={() => (confirmingId = null)} aria-label="Cancel">×</button>
 				{:else}
-					<button class="side-btn danger" onclick={() => (confirmingId = w.id)} aria-label="Delete {w.session_name ?? 'Freestyle'}">
+					<button class="side-btn danger" onclick={() => (confirmingId = w.id)} aria-label="Delete {isRunType(w.run_type) ? runLabel(w.run_type) : (w.session_name ?? 'Freestyle')}">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
 							<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
 						</svg>

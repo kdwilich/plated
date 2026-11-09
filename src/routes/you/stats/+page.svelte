@@ -3,6 +3,7 @@
 	import GuideLink from '$lib/components/GuideLink.svelte';
 	import { isNetLoad } from '$lib/training/measurement';
 	import { plateEquivalent } from '$lib/training/records';
+	import { fmtMiles } from '$lib/training/running';
 	import { DISPLAY_GROUPS, muscleGroup } from '$lib/training/volume';
 	import type { HeadlineRecord } from '$lib/server/stats';
 
@@ -76,7 +77,7 @@
 			case 'time':
 				return fmtDuration(r.duration_s ?? 0);
 			case 'distance_time':
-				return `${fmt(r.distance_m ?? 0)} m`;
+				return `${fmtMiles(r.distance_m ?? 0)} mi`;
 			default:
 				return '';
 		}

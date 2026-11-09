@@ -2,6 +2,7 @@
 	import { APP_NAME } from '$lib/brand';
 	import Heatmap from '$lib/components/Heatmap.svelte';
 	import { bucketByLocalDay, currentStreak } from '$lib/training/streak';
+	import { isRunType, runLabel, runLine } from '$lib/training/running';
 
 	let { data } = $props();
 
@@ -46,13 +47,17 @@
 		<li>
 			<a class="card row" href="/you/history/{w.id}">
 				<span class="row-main">
-					<span class="row-name">{w.session_name ?? 'Freestyle'}</span>
+					<span class="row-name">{isRunType(w.run_type) ? runLabel(w.run_type) : (w.session_name ?? 'Freestyle')}</span>
 					<span class="row-date num">{fmtDate(w.started_at)}</span>
 				</span>
 				<span class="row-stats num">
-					{w.set_count} sets
-					{#if w.total_volume_lb > 0}
-						· {Math.round(w.total_volume_lb).toLocaleString()} lb
+					{#if isRunType(w.run_type)}
+						{runLine(w.total_distance_m, w.finished_at ? Math.round((Date.parse(w.finished_at) - Date.parse(w.started_at)) / 1000) : null)}
+					{:else}
+						{w.set_count} sets
+						{#if w.total_volume_lb > 0}
+							· {Math.round(w.total_volume_lb).toLocaleString()} lb
+						{/if}
 					{/if}
 				</span>
 			</a>
