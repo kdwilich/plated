@@ -9,6 +9,7 @@ import {
 	lastPerformances,
 	recentTrainedMuscles,
 	recentWorkouts,
+	runFieldsValid,
 	workoutDetail,
 	type SyncPayload
 } from './workouts.ts';
@@ -291,4 +292,55 @@ test('exerciseSets does not read another user\'s lifts', async () => {
 	await seedExercise(db);
 	await ingestWorkout(db, 1, payload('w1'));
 	assert.deepEqual(await exerciseSets(db, 2, 'ex1'), []);
+});
+
+test('a run round-trips with its type and effort', async () => {
+	const db = testDb();
+	await seedExercise(db, 'run');
+	const p = payload('r1', 'run');
+	p.workout.run_type = 'easy';
+	p.workout.effort = 6;
+	p.sets[0] = { ...p.sets[0], weight_lb: null, reps: null, duration_s: 1470, distance_m: 5000 };
+	await ingestWorkout(db, 1, p);
+	const { workout } = await workoutDetail(db, 1, 'r1');
+	assert.equal(workout!.run_type, 'easy');
+	assert.equal(workout!.effort, 6);
+});
+
+test('a payload from before the run columns stores nulls, and still drains', async () => {
+	const db = testDb();
+	await seedExercise(db);
+	const p = payload('w1') as unknown as { workout: Record<string, unknown> };
+	delete p.workout.run_type;
+	delete p.workout.effort;
+	assert.equal(await ingestWorkout(db, 1, p as unknown as SyncPayload), true);
+	const { workout } = await workoutDetail(db, 1, 'w1');
+	assert.equal(workout!.run_type, null);
+	assert.equal(workout!.effort, null);
+});
+
+test('re-ingesting a run from the editor keeps it a run', async () => {
+	// INSERT OR REPLACE erases every column it does not list. The editor
+	// rebuilds the payload from what it loaded, so if it ever dropped these two
+	// fields an edit would silently turn a run back into a strength workout.
+	const db = testDb();
+	await seedExercise(db, 'run');
+	const p = payload('r1', 'run');
+	p.workout.run_type = 'tempo';
+	p.workout.effort = 8;
+	await ingestWorkout(db, 1, p);
+	await ingestWorkout(db, 1, { ...p, sets: [] });
+	const { workout } = await workoutDetail(db, 1, 'r1');
+	assert.equal(workout!.run_type, 'tempo');
+	assert.equal(workout!.effort, 8);
+});
+
+test('the sync endpoint can refuse what the schema cannot', () => {
+	const w = payload('w1').workout;
+	assert.equal(runFieldsValid(w), true);
+	assert.equal(runFieldsValid({ ...w, run_type: 'easy', effort: 6 }), true);
+	assert.equal(runFieldsValid({ ...w, run_type: 'jog' }), false);
+	assert.equal(runFieldsValid({ ...w, effort: 11 }), false);
+	assert.equal(runFieldsValid({ ...w, effort: 0 }), false);
+	assert.equal(runFieldsValid({ ...w, effort: 6.5 }), false);
 });

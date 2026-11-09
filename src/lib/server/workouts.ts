@@ -1,5 +1,6 @@
 import type { RecordSet } from '../training/records.ts';
 import type { LoggedSet } from '../training/types.ts';
+import { isEffort, isRunType } from '../training/running.ts';
 
 export interface SyncPayload {
 	workout: {
@@ -8,6 +9,10 @@ export interface SyncPayload {
 		started_at: string;
 		finished_at: string | null;
 		notes: string | null;
+		/** Optional on the wire: an outbox entry from before these columns
+		 *  existed has neither and must still drain. Null = strength. */
+		run_type?: string | null;
+		effort?: number | null;
 	};
 	sets: {
 		id: string;
@@ -21,6 +26,17 @@ export interface SyncPayload {
 		is_warmup: boolean;
 		completed_at: string;
 	}[];
+}
+
+/**
+ * The CHECK that cannot exist. `run_type` has no constraint in the schema
+ * (SQLite cannot alter one onto a live table), so the endpoint refuses what
+ * the column would have.
+ */
+export function runFieldsValid(w: SyncPayload['workout']): boolean {
+	if (w.run_type != null && !isRunType(w.run_type)) return false;
+	if (w.effort != null && !isEffort(w.effort)) return false;
+	return true;
 }
 
 /**
@@ -47,9 +63,20 @@ export async function ingestWorkout(
 	const stmts = [
 		db
 			.prepare(
-				'INSERT OR REPLACE INTO workout (id, routine_session_id, started_at, finished_at, notes, user_id) VALUES (?, ?, ?, ?, ?, ?)'
+				'INSERT OR REPLACE INTO workout (id, routine_session_id, started_at, finished_at, notes, run_type, effort, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
 			)
-			.bind(w.id, w.routine_session_id, w.started_at, w.finished_at, w.notes, userId),
+			// `?? null`: an outbox entry from before these columns has neither
+			// field, and workerd refuses to bind undefined.
+			.bind(
+				w.id,
+				w.routine_session_id,
+				w.started_at,
+				w.finished_at,
+				w.notes,
+				w.run_type ?? null,
+				w.effort ?? null,
+				userId
+			),
 		// A re-sync after an in-session edit must not leave orphaned sets behind.
 		db.prepare('DELETE FROM workout_set WHERE workout_id = ?').bind(w.id)
 	];
@@ -201,7 +228,9 @@ export async function recentWorkouts(
 
 export async function workoutDetail(db: D1Database, userId: number, id: string) {
 	// workout_set carries no owner; it inherits one through this join.
-	const [workout, sets] = await db.batch([
+	// Typed so callers can read a column without a cast: batch<T> defaults to
+	// unknown, and svelte-check type-checks the tests that read run_type.
+	const [workout, sets] = await db.batch<Record<string, unknown>>([
 		db
 			.prepare(
 				'SELECT w.*, rs.name AS session_name FROM workout w LEFT JOIN routine_session rs ON rs.id = w.routine_session_id WHERE w.id = ? AND w.user_id = ?'

@@ -12,6 +12,9 @@ export interface HistoryWorkout {
 	started_at: string;
 	finished_at: string | null;
 	notes: string | null;
+	/** Absent on rows loaded before the run columns existed; sent as null. */
+	run_type?: string | null;
+	effort?: number | null;
 }
 
 /** A set being edited: the stored row plus what the UI needs to render it. */
@@ -91,7 +94,11 @@ export function payloadFromEdits(workout: HistoryWorkout, sets: EditableSet[]): 
 			routine_session_id: workout.routine_session_id,
 			started_at: workout.started_at,
 			finished_at: workout.finished_at,
-			notes: workout.notes
+			notes: workout.notes,
+			// Carried, not recomputed: INSERT OR REPLACE at ingest erases any
+			// column the payload omits, and an edit must not un-run a run.
+			run_type: workout.run_type ?? null,
+			effort: workout.effort ?? null
 		},
 		sets: sets.map((s, position) => ({
 			id: s.id,

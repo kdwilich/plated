@@ -165,6 +165,11 @@ export interface OutboxEntry {
 		started_at: string;
 		finished_at: string | null;
 		notes: string | null;
+		/** A run's kind and whole-run effort. Optional on the wire: an entry
+		 *  queued by a build before these existed has neither and must still
+		 *  drain. Null is "a strength workout". */
+		run_type?: string | null;
+		effort?: number | null;
 	};
 	sets: ActiveSet[];
 }
@@ -176,7 +181,10 @@ export function toPayload(session: ActiveSession): OutboxEntry {
 			routine_session_id: session.routine_session_id,
 			started_at: session.started_at,
 			finished_at: session.finished_at,
-			notes: session.notes
+			notes: session.notes,
+			// A live session is always strength. Runs never pass through here.
+			run_type: null,
+			effort: null
 		},
 		sets: session.sets
 	};

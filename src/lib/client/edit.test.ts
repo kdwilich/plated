@@ -65,7 +65,9 @@ test('payloadFromEdits preserves the workout envelope untouched', () => {
 		routine_session_id: 'rs1',
 		started_at: STARTED,
 		finished_at: FINISHED,
-		notes: null
+		notes: null,
+		run_type: null,
+		effort: null
 	});
 });
 
@@ -99,4 +101,20 @@ test('swapping the exercise rewrites only the attribution', () => {
 	assert.deepEqual(payload.sets.map((s) => s.exercise_id), ['ex2', 'ex2']);
 	// The numbers you actually lifted are untouched by a swap.
 	assert.deepEqual(payload.sets.map((s) => [s.weight_lb, s.reps]), [[45, 10], [315, 5]]);
+});
+
+test('payloadFromEdits carries a run\'s type and effort through a round trip', () => {
+	const run: HistoryWorkout = { ...workout, run_type: 'easy', effort: 6 };
+	const p = payloadFromEdits(run, []);
+	assert.equal(p.workout.run_type, 'easy');
+	assert.equal(p.workout.effort, 6);
+});
+
+test('a workout loaded before the run columns existed sends nulls, not undefined', () => {
+	// The `workout` fixture has neither field, exactly like a row the detail
+	// page loaded before the migration. `undefined` does not survive JSON and
+	// workerd refuses to bind it; null is the value the column means.
+	const p = payloadFromEdits(workout, []);
+	assert.equal(p.workout.run_type, null);
+	assert.equal(p.workout.effort, null);
 });
