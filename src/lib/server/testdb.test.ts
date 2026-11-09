@@ -60,3 +60,17 @@ test('each testDb is isolated from the last', async () => {
 	const { results } = await b.prepare('SELECT id FROM gym').all();
 	assert.deepEqual(results, []);
 });
+
+test('the runs migration gives workout its two columns', async () => {
+	const db = testDb();
+	await db
+		.prepare(
+			`INSERT INTO workout (id, started_at, finished_at, run_type, effort, user_id)
+			 VALUES ('w1', '2026-03-01T18:00:00Z', '2026-03-01T18:30:00Z', 'easy', 6, 1)`
+		)
+		.run();
+	const row = await db.prepare('SELECT run_type, effort FROM workout WHERE id = ?').bind('w1').first();
+	// Spread first: node:sqlite rows have a null prototype and strict deepEqual
+	// compares prototypes, which is why no server test deepEquals a raw row.
+	assert.deepEqual({ ...row }, { run_type: 'easy', effort: 6 });
+});

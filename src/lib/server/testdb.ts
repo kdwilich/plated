@@ -59,6 +59,7 @@ export function testDb(): D1Database {
 	db.exec('PRAGMA foreign_keys = ON');
 	db.exec(d1('schema.sql'));
 	db.exec(d1('migrations/0001_multi_user.sql'));
+	db.exec(d1('migrations/0002_runs.sql'));
 
 	return {
 		prepare: (sql: string) => new Stmt(db, sql),
