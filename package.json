@@ -16,7 +16,8 @@
 		"dev:wrangler": "vite build && wrangler dev",
 		"seed": "node scripts/seed-exercises.mjs",
 		"icons": "node scripts/make-icons.mjs",
-		"deploy": "vite build && wrangler deploy"
+		"deploy": "vite build && wrangler deploy",
+		"deploy:ci": "wrangler d1 migrations apply plateload-db --remote && wrangler deploy"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^5.20260816.1",

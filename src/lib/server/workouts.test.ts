@@ -46,11 +46,12 @@ function payload(id: string, exerciseId = 'ex1', sessionId: string | null = null
 	};
 }
 
-/** The catalog row the sets point at. */
+/** The catalog row the sets point at. OR REPLACE because migration 0003
+ *  already seeds `run`, and a test that asks for that id wants its own shape. */
 async function seedExercise(db: D1Database, id = 'ex1') {
 	await db
 		.prepare(
-			`INSERT INTO exercise (id, name, measurement, progression, primary_muscles, movement_pattern)
+			`INSERT OR REPLACE INTO exercise (id, name, measurement, progression, primary_muscles, movement_pattern)
 			 VALUES (?, ?, 'load_reps', 'double', '["quadriceps"]', 'squat')`
 		)
 		.bind(id, `Exercise ${id}`)

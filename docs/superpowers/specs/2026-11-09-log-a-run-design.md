@@ -322,12 +322,13 @@ renders.
   reads the columns. `wrangler d1 migrations apply` is a separate step from
   `vite build && wrangler deploy`, and the read of a missing column is a 500
   on every history page.
-- **The seed in production.** `seed.sql` is an upsert and is applied by hand
-  with `wrangler d1 execute --remote --file`. The `run` row must exist before
-  the first run syncs, or `workout_set.exercise_id` points at nothing and the
-  history detail's join drops the set. The sync endpoint does not enforce the
-  foreign key (the schema declares none on `workout_set.exercise_id`), so this
-  fails quietly. Seed first.
+- **The seed in production.** The `run` row must exist before the first run
+  syncs, or `workout_set.exercise_id` points at nothing and the history
+  detail's join drops the set. The sync endpoint does not enforce the foreign
+  key (the schema declares none on `workout_set.exercise_id`), so this would
+  fail quietly. That is why the row rides migration `0003_seed_run.sql`
+  rather than waiting for a by-hand `seed.sql` run, and why `deploy:ci`
+  applies migrations before `wrangler deploy`.
 - **Date input and time zones.** `type="date"` yields `YYYY-MM-DD` with no
   zone. Building `started_at` with `new Date(y, m - 1, d, 12)` keeps it local;
   `new Date('YYYY-MM-DD')` would parse as UTC midnight and land yesterday

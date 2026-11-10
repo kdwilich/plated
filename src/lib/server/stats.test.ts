@@ -229,12 +229,7 @@ test('a run is a workout but not a set', async () => {
 	// A mile is not a set, and neither is a treadmill mile inside a lift.
 	// The run still counts as a workout: it happened.
 	const db = await seed(testDb());
-	await db
-		.prepare(
-			`INSERT INTO exercise (id, name, measurement, progression, primary_muscles, secondary_muscles)
-			 VALUES ('run', 'Run', 'distance_time', 'none', '[]', '[]')`
-		)
-		.run();
+	// `run` is seeded by migration 0003, so the test double already has it.
 	await addWorkout(db, { id: 'w1', user: 1, started: '2026-03-01T18:00:00Z', sets: [{ weight: 225, reps: 5 }] });
 	await db
 		.prepare(`INSERT INTO workout (id, started_at, finished_at, run_type, user_id) VALUES ('r1', '2026-03-02T18:00:00Z', '2026-03-02T18:30:00Z', 'easy', 1)`)

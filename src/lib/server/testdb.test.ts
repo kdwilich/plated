@@ -74,3 +74,14 @@ test('the runs migration gives workout its two columns', async () => {
 	// compares prototypes, which is why no server test deepEquals a raw row.
 	assert.deepEqual({ ...row }, { run_type: 'easy', effort: 6 });
 });
+
+test('the run exercise is there before anyone logs a run', async () => {
+	// Migration 0003 seeds it so a deploy can never read a run whose exercise
+	// is missing. The sync endpoint does not enforce the foreign key, so a
+	// missing row would fail quietly: the history join would drop the set.
+	const db = testDb();
+	const row = await db.prepare('SELECT measurement, progression FROM exercise WHERE id = ?').bind('run').first();
+	assert.deepEqual({ ...row }, { measurement: 'distance_time', progression: 'none' });
+	const aliases = await db.prepare('SELECT alias FROM exercise_alias WHERE exercise_id = ? ORDER BY alias').bind('run').all();
+	assert.deepEqual(aliases.results.map((r) => ({ ...r })), [{ alias: 'Jog' }, { alias: 'Running' }]);
+});
