@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { testDb } from './testdb.ts';
-import { bootstrapUser, getGym, saveGym } from './gym.ts';
+import { bootstrapUser, getGym, saveGym, platesRequired, GYM_PRESETS, EQUIPMENT_KEYS } from './gym.ts';
 
 test("a user's gym is their own", async () => {
 	const db = testDb();
@@ -70,4 +70,25 @@ test('a gym carries its owner', async () => {
 		.bind((await getGym(db, 7)).id)
 		.first<{ user_id: number }>();
 	assert.equal(row!.user_id, 7);
+});
+
+test('plates are only required where there is a bar to load', () => {
+	assert.equal(platesRequired(['body only']), false);
+	assert.equal(platesRequired(['body only', 'pull-up bar', 'bands']), false);
+	assert.equal(platesRequired(['dumbbell', 'body only']), false);
+	assert.equal(platesRequired(['barbell']), true);
+	assert.equal(platesRequired(['e-z curl bar']), true);
+});
+
+test('a new gym comes with the pull-up bar', async () => {
+	const db = testDb();
+	await bootstrapUser(db, 1);
+	assert.ok((await getGym(db, 1)).equipment.includes('pull-up bar'));
+});
+
+test('the presets are what they say', () => {
+	assert.deepEqual(GYM_PRESETS.floor, ['body only']);
+	assert.deepEqual(GYM_PRESETS.bar, ['body only', 'pull-up bar']);
+	for (const k of ['barbell', 'dumbbell', 'machine', 'cable', 'body only', 'pull-up bar']) assert.ok(GYM_PRESETS.full.includes(k), k);
+	for (const keys of Object.values(GYM_PRESETS)) for (const k of keys) assert.ok(EQUIPMENT_KEYS.includes(k), k);
 });

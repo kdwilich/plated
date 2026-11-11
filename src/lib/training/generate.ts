@@ -403,8 +403,16 @@ const FALLBACK: Partial<Record<MovementPattern, MovementPattern>> = {
 	// No barbell or dumbbell vertical pull exists. Without a cable stack or a
 	// bar, a pull day kept one row and back finished a minimalist week on 2.5
 	// sets; a second row is the coach's stand-in.
-	vertical_pull: 'horizontal_pull'
+	vertical_pull: 'horizontal_pull',
+	// Bodyweight gyms. Both fire only when the pattern has no candidate at
+	// all, so a gym with a single dumbbell is untouched. A chin-up is the
+	// curl a bar gym has; another push-up variant is the fly a floor has.
+	biceps_curl: 'vertical_pull',
+	chest_fly: 'horizontal_press'
 };
+
+/** The gym key that unlocks pull-ups, hanging raises and dips. */
+export const BAR_KEY = 'pull-up bar';
 
 function resolveSlot(slot: Slot, byPattern: Map<MovementPattern, Exercise[]>): Slot {
 	const fallback = FALLBACK[slot.pattern];
@@ -445,6 +453,7 @@ export function generate(input: GenerateInput): RoutineDraft {
 	for (const e of input.catalog) {
 		if (!e.movement_pattern) continue;
 		if (e.equipment && !equipment.has(e.equipment)) continue;
+		if (e.requires_bar && !equipment.has(BAR_KEY)) continue;
 		const list = byPattern.get(e.movement_pattern) ?? [];
 		list.push(e);
 		byPattern.set(e.movement_pattern, list);
@@ -476,9 +485,13 @@ export function generate(input: GenerateInput): RoutineDraft {
 		const slots = t.slots.map((s) => resolveSlot(s, byPattern));
 		for (const slot of slots) {
 			const candidates = rankCandidates(byPattern.get(slot.pattern) ?? [], slot, slots, fillable);
+			// A required slot may repeat an exercise from another day once the
+			// pattern runs out, never one already in this session: a floor gym's
+			// Lower B listed the same step-up twice.
+			const inSession = (e: Exercise) => session.exercises.some((x) => x.exercise.id === e.id);
 			const pick =
 				candidates.find((e) => !usedIds.has(e.id)) ??
-				(slot.optional ? undefined : candidates[0]);
+				(slot.optional ? undefined : candidates.find((e) => !inSession(e)));
 			if (!pick) {
 				if (!slot.optional) {
 					warnings.push(`No ${slot.pattern.replace('_', ' ')} available for "${t.name}" with your equipment.`);

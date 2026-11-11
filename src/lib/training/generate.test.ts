@@ -895,3 +895,86 @@ test('a posted draft must have the shape of a draft before anything reads it', (
 		assert.equal(isDraftShape(bad), false, JSON.stringify(bad));
 	}
 });
+
+// --- Bodyweight foundations -------------------------------------------------
+
+function bodyweight(): Exercise[] {
+	const bw = (pattern: MovementPattern, muscles: string[], priority: number, secondary: string[] = [], requires_bar = false): Exercise => ({
+		...ex(pattern, 'body only', muscles, priority, secondary),
+		measurement: 'reps_only',
+		requires_bar
+	});
+	return [
+		bw('horizontal_press', ['chest'], 70, ['triceps', 'shoulders']),
+		bw('horizontal_press', ['chest'], 38, ['triceps']),
+		bw('incline_press', ['chest'], 40, ['shoulders']),
+		bw('vertical_press', ['shoulders'], 45, ['triceps']),
+		bw('triceps_extension', ['triceps'], 38),
+		bw('squat', ['quadriceps'], 38, ['glutes']),
+		bw('lunge', ['quadriceps'], 45, ['glutes', 'hamstrings']),
+		bw('hip_hinge', ['hamstrings'], 40, ['glutes']),
+		bw('hip_thrust', ['glutes'], 30, ['hamstrings']),
+		bw('leg_curl', ['hamstrings'], 34),
+		bw('calf_raise', ['calves'], 38),
+		bw('ab_flexion', ['abdominals'], 38),
+		bw('vertical_pull', ['lats'], 95, ['biceps'], true),
+		bw('vertical_pull', ['lats'], 90, ['biceps'], true),
+		bw('horizontal_pull', ['middle back'], 40, ['biceps'], true),
+		bw('ab_flexion', ['abdominals'], 82, [], true)
+	];
+}
+
+const COMBOS = [2, 3, 4, 5, 6].flatMap((days) =>
+	(['full_body', 'targeted'] as const).flatMap((splitStyle) =>
+		['hypertrophy', 'strength', 'minimalist'].flatMap((profileKey) =>
+			(['balanced', 'lower', 'upper'] as const).map((emphasis) => ({ daysPerWeek: days as 2 | 3 | 4 | 5 | 6, splitStyle, profileKey, emphasis }))
+		)
+	)
+);
+
+test('bar work is only prescribed when the gym has a bar', () => {
+	for (const c of COMBOS) {
+		const floor = generate({ ...c, equipment: ['body only'], catalog: bodyweight() });
+		const barred = floor.sessions.flatMap((s) => s.exercises).filter((e) => e.exercise.requires_bar);
+		assert.deepEqual(barred.map((e) => e.exercise.name), [], JSON.stringify(c));
+	}
+	const withBar = generate({ daysPerWeek: 3, equipment: ['body only', 'pull-up bar'], profileKey: 'hypertrophy', catalog: bodyweight() });
+	assert.ok(withBar.sessions.flatMap((s) => s.exercises).some((e) => e.exercise.movement_pattern === 'vertical_pull'));
+});
+
+test('no exercise appears twice in one session', () => {
+	for (const equipment of [['body only'], ['body only', 'pull-up bar']]) {
+		for (const c of COMBOS) {
+			const draft = generate({ ...c, equipment, catalog: bodyweight() });
+			for (const s of draft.sessions) {
+				const ids = s.exercises.map((e) => e.exercise.id);
+				assert.equal(new Set(ids).size, ids.length, `${equipment.join('+')} ${JSON.stringify(c)} "${s.name}": ${s.exercises.map((e) => e.exercise.name).join(', ')}`);
+			}
+		}
+	}
+});
+
+test('with a bar and no curls, the biceps slot is a chin-up at accessory dose', () => {
+	const draft = generate({ daysPerWeek: 3, equipment: ['body only', 'pull-up bar'], profileKey: 'hypertrophy', splitStyle: 'targeted', catalog: bodyweight() });
+	assert.ok(!draft.warnings.some((w) => w.includes('biceps curl')), JSON.stringify(draft.warnings));
+	const pull = draft.sessions.find((s) => s.name === 'Pull')!;
+	assert.ok(pull.exercises.filter((e) => e.exercise.movement_pattern === 'vertical_pull').length >= 2, pull.exercises.map((e) => e.exercise.name).join(', '));
+});
+
+test('with no flyes, the fly slot is another push-up', () => {
+	const draft = generate({ daysPerWeek: 3, equipment: ['body only'], profileKey: 'hypertrophy', splitStyle: 'targeted', catalog: bodyweight() });
+	assert.ok(!draft.warnings.some((w) => w.includes('chest fly')), JSON.stringify(draft.warnings));
+});
+
+test('a bar gym fills every session; a floor gym only comes up short on a pull day', () => {
+	// Nothing on the floor pulls. A targeted Pull day without a bar is named
+	// and blocked from saving rather than padded with something it is not.
+	for (const c of COMBOS) {
+		const bar = generate({ ...c, equipment: ['body only', 'pull-up bar'], catalog: bodyweight() });
+		assert.deepEqual(emptySessions(bar), [], `bar ${JSON.stringify(c)}`);
+		const floor = generate({ ...c, equipment: ['body only'], catalog: bodyweight() });
+		const empty = emptySessions(floor);
+		if (c.splitStyle === 'full_body') assert.deepEqual(empty, [], `floor ${JSON.stringify(c)}`);
+		for (const name of empty) assert.match(name, /^Pull/, `floor ${JSON.stringify(c)}`);
+	}
+});

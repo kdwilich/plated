@@ -32,7 +32,12 @@ const repBased = (m: Measurement) => m === 'load_reps' || m === 'reps_only';
  * unavailable options are demoted rather than hidden.
  */
 const inGym = (candidate: Exercise, gym: string[]): boolean =>
-	gym.length === 0 || (!!candidate.equipment && gym.includes(candidate.equipment));
+	gym.length === 0 ||
+	(!!candidate.equipment &&
+		gym.includes(candidate.equipment) &&
+		// Same key the generator reads; a string here so this module stays
+		// free of the generator's imports.
+		(!candidate.requires_bar || gym.includes('pull-up bar')));
 
 /**
  * Substitutes for one exercise, best first.

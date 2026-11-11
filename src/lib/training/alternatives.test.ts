@@ -148,3 +148,14 @@ test('ranking is deterministic', () => {
 	const b = rankAlternatives(BENCH, [...CATALOG].reverse()).map((e) => e.id);
 	assert.deepEqual(a, b);
 });
+
+test('bar work counts as available only in a gym with a bar', () => {
+	// Pull-ups are body-only in the catalog, so equipment alone called them
+	// available on a floor: the swap for a chin-up led with something the
+	// gym cannot do.
+	const chin = { ...ex('chin', 'vertical_pull', 'body only', ['lats'], { secondary: ['biceps'] }), requires_bar: true };
+	const pullup = { ...ex('pullup', 'vertical_pull', 'body only', ['lats'], { secondary: ['biceps'] }), requires_bar: true };
+	const towelRow = ex('towel-row', 'horizontal_pull', 'body only', ['lats']);
+	assert.deepEqual(rankAlternatives(chin, [pullup, towelRow], { equipment: ['body only'] }).map((e) => e.id), ['towel-row', 'pullup']);
+	assert.deepEqual(rankAlternatives(chin, [pullup, towelRow], { equipment: ['body only', 'pull-up bar'] }).map((e) => e.id), ['pullup', 'towel-row']);
+});

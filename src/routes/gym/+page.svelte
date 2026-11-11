@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/brand';
 	import { enhance } from '$app/forms';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
@@ -10,6 +11,29 @@
 	const barsText = $derived(
 		data.gym.bars.map((b) => `${b.name}:${b.weight_lb}${b.is_default ? '*' : ''}`).join(', ')
 	);
+
+	// The boxes are state so a preset can set them. Seeded once from the
+	// saved gym; after that they are the form's, not the server's.
+	// svelte-ignore state_referenced_locally
+	const selected = new SvelteSet(data.gym.equipment);
+	const loadable = $derived(selected.has('barbell') || selected.has('e-z curl bar'));
+
+	const LABELS: Record<string, string> = { 'pull-up bar': 'pull-up / dip bar' };
+	const PRESETS = [
+		['floor', 'Floor only'],
+		['bar', 'Pull-up bar'],
+		['full', 'Full gym']
+	] as const;
+
+	function toggle(key: string, on: boolean) {
+		if (on) selected.add(key);
+		else selected.delete(key);
+	}
+
+	function preset(keys: string[]) {
+		selected.clear();
+		for (const k of keys) selected.add(k);
+	}
 
 </script>
 
@@ -26,18 +50,30 @@
 
 	<fieldset class="field">
 		<span class="label">Equipment</span>
+		<div class="presets">
+			{#each PRESETS as [key, label] (key)}
+				<button type="button" class="btn preset" onclick={() => preset(data.presets[key])}>{label}</button>
+			{/each}
+		</div>
 		<div class="equipment">
 			{#each data.equipmentKeys as key (key)}
-				<label class="eq" class:on={data.gym.equipment.includes(key)}>
-					<input type="checkbox" name="eq:{key}" checked={data.gym.equipment.includes(key)} />
-					<span>{key}</span>
+				<label class="eq" class:on={selected.has(key)}>
+					<input
+						type="checkbox"
+						name="eq:{key}"
+						checked={selected.has(key)}
+						onchange={(e) => toggle(key, e.currentTarget.checked)}
+					/>
+					<span>{LABELS[key] ?? key}</span>
 				</label>
 			{/each}
 		</div>
 	</fieldset>
 
 	<label class="field">
-		<span class="label">Plates (per side pairs) — "45x10, 25x2, 10x4, 5x2, 2.5x2"</span>
+		<span class="label">
+			Plates (per side pairs) — "45x10, 25x2, 10x4, 5x2, 2.5x2"{loadable ? '' : ' · optional without a barbell'}
+		</span>
 		<input type="text" name="plates" value={platesText} class="num" />
 	</label>
 
@@ -81,6 +117,17 @@
 		gap: $space-2;
 		margin-bottom: $space-4;
 		border: none;
+	}
+
+	.presets {
+		display: flex;
+		gap: $space-2;
+		margin-bottom: $space-2;
+	}
+
+	.preset {
+		flex: 1;
+		font-size: 13px;
 	}
 
 	.equipment {

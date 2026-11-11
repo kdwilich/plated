@@ -38,6 +38,8 @@ export interface Exercise {
 	primary_muscles: string[];
 	secondary_muscles: string[];
 	unilateral: boolean;
+	/** Needs a bar to hang from or press on: pull-ups, hanging raises, dips. */
+	requires_bar?: boolean;
 	priority: number;
 }
 

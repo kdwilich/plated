@@ -1,24 +1,11 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
-import { getGym, saveGym } from '$lib/server/gym';
-
-const EQUIPMENT_KEYS = [
-	'barbell',
-	'dumbbell',
-	'machine',
-	'cable',
-	'body only',
-	'e-z curl bar',
-	'kettlebells',
-	'bands',
-	'medicine ball',
-	'exercise ball'
-];
+import { EQUIPMENT_KEYS, GYM_PRESETS, getGym, platesRequired, saveGym } from '$lib/server/gym';
 
 export const load: PageServerLoad = async ({ platform, locals }) => {
 	const db = getDb(platform);
-	return { gym: await getGym(db, locals.user!.id), equipmentKeys: EQUIPMENT_KEYS };
+	return { gym: await getGym(db, locals.user!.id), equipmentKeys: EQUIPMENT_KEYS, presets: GYM_PRESETS };
 };
 
 export const actions: Actions = {
@@ -38,7 +25,10 @@ export const actions: Actions = {
 			if (!m) continue;
 			plates.push({ denomination_lb: Number(m[1]), pairs: m[2] ? Number(m[2]) : 10 });
 		}
-		if (plates.length === 0) return fail(400, { error: 'List at least one plate, e.g. "45x10, 25x2, 10x4, 5x2, 2.5x2".' });
+		// A floor or bar gym has nothing to load. Only a barbell needs plates.
+		if (plates.length === 0 && platesRequired(equipment)) {
+			return fail(400, { error: 'List at least one plate, e.g. "45x10, 25x2, 10x4, 5x2, 2.5x2".' });
+		}
 
 		// "Straight bar:45*, EZ curl:25" — * marks the default
 		const bars: { id: string; name: string; weight_lb: number; is_default: boolean }[] = [];

@@ -17,12 +17,13 @@ function rowToExercise(r: Record<string, unknown>): ExerciseRow {
 		...(r as unknown as ExerciseRow),
 		primary_muscles: JSON.parse((r.primary_muscles as string) || '[]'),
 		secondary_muscles: JSON.parse((r.secondary_muscles as string) || '[]'),
-		unilateral: !!r.unilateral
+		unilateral: !!r.unilateral,
+		requires_bar: !!r.requires_bar
 	};
 }
 
 const COLS =
-	'id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,video_id,image';
+	'id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,video_id,image,requires_bar';
 
 export async function searchExercises(db: D1Database, q: string, limit = 25): Promise<ExerciseRow[]> {
 	const trimmed = q.trim();

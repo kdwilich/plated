@@ -36,7 +36,8 @@ function parseExercise(r: Record<string, unknown>): ExerciseRow {
 		...(r as unknown as ExerciseRow),
 		primary_muscles: JSON.parse((r.primary_muscles as string) || '[]'),
 		secondary_muscles: JSON.parse((r.secondary_muscles as string) || '[]'),
-		unilateral: !!r.unilateral
+		unilateral: !!r.unilateral,
+		requires_bar: !!r.requires_bar
 	};
 }
 

@@ -1,5 +1,35 @@
 import type { GymConfig, Bar, PlateStock } from '../training/types.ts';
 
+/** Every equipment key the gym page offers, in display order. */
+export const EQUIPMENT_KEYS = [
+	'barbell',
+	'dumbbell',
+	'machine',
+	'cable',
+	'body only',
+	// Pull-ups, hanging raises and dips. Body-only work, but not floor work:
+	// the generator offers it only when this is checked.
+	'pull-up bar',
+	'e-z curl bar',
+	'kettlebells',
+	'bands',
+	'medicine ball',
+	'exercise ball'
+];
+
+const FULL_GYM = ['barbell', 'dumbbell', 'machine', 'cable', 'body only', 'pull-up bar', 'e-z curl bar', 'kettlebells'];
+
+/** One tap to a common setup. A preset sets the boxes; saving is still yours. */
+export const GYM_PRESETS: Record<'floor' | 'bar' | 'full', string[]> = {
+	floor: ['body only'],
+	bar: ['body only', 'pull-up bar'],
+	full: FULL_GYM
+};
+
+/** Plates only matter where there is a bar to load them on. */
+export const platesRequired = (equipment: string[]): boolean =>
+	equipment.includes('barbell') || equipment.includes('e-z curl bar');
+
 export interface GymRecord extends GymConfig {
 	id: string;
 	name: string;
@@ -76,15 +106,7 @@ export async function bootstrapUser(db: D1Database, userId: number): Promise<str
 		name: 'My gym',
 		dumbbell_step_lb: 5,
 		machine_step_lb: 10,
-		equipment: [
-			'barbell',
-			'dumbbell',
-			'machine',
-			'cable',
-			'body only',
-			'e-z curl bar',
-			'kettlebells'
-		],
+		equipment: FULL_GYM,
 		plates: [45, 35, 25, 10, 5, 2.5].map((d) => ({
 			denomination_lb: d,
 			pairs: d >= 25 ? 10 : 4

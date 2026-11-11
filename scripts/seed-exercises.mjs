@@ -44,8 +44,82 @@ const SYNTHETIC = [
 		images: [],
 		_aliases: ['Running', 'Jog'],
 		_cues: 'Distance and time. Surface, route and how it felt go in the note.'
+	},
+	// Bodyweight staples the dataset lacks or buries under stretching. Each
+	// fills a slot a floor gym otherwise leaves empty, priced below every
+	// loaded classic so a gym that has the barbell never sees them first.
+	{
+		id: 'bw-bulgarian-split-squat',
+		name: 'Bulgarian Split Squat (Bodyweight)',
+		category: 'strength',
+		equipment: 'body only',
+		primaryMuscles: ['quadriceps'],
+		secondaryMuscles: ['glutes', 'hamstrings'],
+		mechanic: 'compound',
+		level: 'beginner',
+		instructions: [],
+		images: [],
+		_priority: 45,
+		_aliases: ['Rear-Foot Elevated Split Squat', 'RFESS'],
+		_cues: 'Back foot on a chair or bench. Drop straight down, front knee travels over the toes. Most of the weight stays on the front leg.'
+	},
+	{
+		id: 'bw-single-leg-rdl',
+		name: 'Single-Leg Romanian Deadlift (Bodyweight)',
+		category: 'strength',
+		equipment: 'body only',
+		primaryMuscles: ['hamstrings'],
+		secondaryMuscles: ['glutes', 'lower back'],
+		mechanic: 'compound',
+		level: 'beginner',
+		instructions: [],
+		images: [],
+		_priority: 40,
+		_aliases: ['Single-Leg RDL', 'SL RDL'],
+		_cues: 'Soft standing knee, hips square to the floor. Reach long through the back heel until the hamstring stops you. Slow is the load.'
+	},
+	{
+		id: 'bw-single-leg-calf-raise',
+		name: 'Single-Leg Calf Raise',
+		category: 'strength',
+		equipment: 'body only',
+		primaryMuscles: ['calves'],
+		secondaryMuscles: [],
+		mechanic: 'isolation',
+		level: 'beginner',
+		instructions: [],
+		images: [],
+		_priority: 40,
+		_aliases: ['Single-Leg Calf Raise (Bodyweight)'],
+		_cues: 'Ball of the foot on a step, fingertips on a wall. Full stretch at the bottom, pause; full rise, pause.'
+	},
+	{
+		id: 'bw-pike-push-up',
+		name: 'Pike Push-Up',
+		category: 'strength',
+		equipment: 'body only',
+		primaryMuscles: ['shoulders'],
+		secondaryMuscles: ['triceps'],
+		mechanic: 'compound',
+		level: 'beginner',
+		instructions: [],
+		images: [],
+		_priority: 45,
+		_aliases: ['Pike Pushup'],
+		_cues: 'Hips high, head travels forward of the hands into a tripod. Feet on a box makes it harder; a wall handstand is the next step.'
 	}
 ];
+
+// A strength row with no equipment in the dataset is a no-kit exercise.
+// Leaving it null hid the inverted row and the walking lunge from every gym.
+const normalize = (e) =>
+	!e.equipment && ['strength', 'powerlifting', 'strongman'].includes(e.category) ? { ...e, equipment: 'body only' } : e;
+
+// Body-only work that needs something to hang from or press on. Kept beside
+// `equipment` rather than replacing it: net load and increments key off
+// 'body only', and a pull-up is still bodyweight.
+const BAR = /pull-?up|pullup|chin-?up|chinup|gorilla chin|hanging|\bdips\b|parallel bars|inverted row|muscle-?up/i;
+const requiresBar = (e) => (e.equipment === 'body only' && BAR.test(e.name) && !/bench dips/i.test(e.name) ? 1 : 0);
 
 // ---------------------------------------------------------------------------
 // Measurement + progression: rules over category / equipment / name.
@@ -87,10 +161,12 @@ function classify(e) {
 
 const ELIGIBLE_CAT = new Set(['strength', 'powerlifting', 'strongman']);
 const ELIGIBLE_EQ = new Set([
-	'barbell', 'dumbbell', 'machine', 'cable', 'body only', 'e-z curl bar', 'kettlebells', 'other'
+	'barbell', 'dumbbell', 'machine', 'cable', 'body only', 'e-z curl bar', 'kettlebells', 'bands', 'other'
 ]);
 // Specialty-implement variants never deserve a generator slot.
-const EXCLUDE = /with chains|with bands|smith|band assisted|axle|car deadlift|guillotine|jm press|rack pull|sled|zercher|jefferson|frankenstein|kneeling squat|jerk/i;
+// Jumps are plyometrics; manual, towel and scapular entries need a partner or
+// are drills, not a slot's worth of work.
+const EXCLUDE = /with chains|smith|jump|manual|towel|scapular|band assisted|axle|car deadlift|guillotine|jm press|rack pull|sled|zercher|jefferson|frankenstein|kneeling squat|jerk/i;
 
 const PATTERN_RULES = [
 	// "Upright row" only matched the literal substring "upright row" — dataset
@@ -104,7 +180,9 @@ const PATTERN_RULES = [
 	[/turkish get-?up/i, null],
 	[/wrist|finger/i, null],
 	// Inverted body, overhead press: the vertical slot, not the bench slot.
-	[/handstand/i, 'vertical_press'],
+	[/handstand|pike push-?up/i, 'vertical_press'],
+	// Feet up puts the push-up on the upper chest: the floor's incline press.
+	[/decline push-?up/i, 'incline_press'],
 	// A press only fills the chest slot when chest is what it trains: floor
 	// presses and close-grip push-ups are triceps-primary in the dataset.
 	[/push-?up/i, chestOrTriceps],
@@ -141,19 +219,23 @@ const PATTERN_RULES = [
 	[/pull through/i, 'hip_hinge'],
 	[/hyperextension|back extension/i, 'hip_hinge'],
 	[/hip thrust|glute bridge/i, 'hip_thrust'],
+	// Nordic-style: the knee flexes against bodyweight, which is a leg curl.
+	// Body-only rows only: the machine version stays out of a full gym's
+	// leg curl rotation, which this slice does not touch.
+	[/glute[- ]ham raise/i, (e) => (e.equipment === 'body only' ? 'leg_curl' : null)],
 	[/split squat|bulgarian/i, 'lunge'],
 	// Calf press on the leg press machine is a calf isolation exercise, not a
 	// squat — must be checked before the leg-press rule below.
 	[/calf press/i, 'calf_raise'],
 	[/leg press|hack squat/i, 'squat'],
-	[/squat/i, (e) => (e.equipment === 'body only' ? null : 'squat')],
+	[/squat/i, 'squat'],
 	[/lunge|step-up|step up/i, 'lunge'],
 	[/leg extension/i, 'leg_extension'],
 	[/leg curl/i, 'leg_curl'],
 	[/calf|toe press/i, 'calf_raise'],
 	[/flye?s?\b|pec deck|butterfly|cable crossover/i, (e) => (has(e, 'chest') ? 'chest_fly' : 'rear_delt')],
 	[/lateral raise|side lateral/i, 'lateral_raise'],
-	[/rear delt|reverse fl/i, 'rear_delt'],
+	[/rear delt|reverse fl|pull apart/i, 'rear_delt'],
 	[/preacher|concentration|hammer curl|curl/i, (e) => (has(e, 'biceps') ? 'biceps_curl' : null)],
 	// "Kickback" alone is ambiguous — glute kickbacks share the name with
 	// triceps kickbacks but train a completely different muscle. No pattern
@@ -179,6 +261,9 @@ function pattern(e) {
 	if (!ELIGIBLE_CAT.has(e.category)) return null;
 	if (!ELIGIBLE_EQ.has(e.equipment ?? '')) return null;
 	if (EXCLUDE.test(e.name)) return null;
+	// Bands as the implement are a home gym's dumbbells. Bands strapped onto
+	// a barbell are a specialty variant.
+	if (/with bands/i.test(e.name) && e.equipment !== 'bands') return null;
 	for (const [re, p] of PATTERN_RULES) {
 		if (re.test(e.name)) return typeof p === 'function' ? p(e) : p;
 	}
@@ -189,7 +274,7 @@ function pattern(e) {
 // curated overrides pin the classics to the top.
 function basePriority(e, pat) {
 	if (!pat) return 0;
-	const eq = { barbell: 50, dumbbell: 45, machine: 40, cable: 38, 'e-z curl bar': 35, kettlebells: 28, 'body only': 26, other: 15 }[e.equipment ?? ''] ?? 10;
+	const eq = { barbell: 50, dumbbell: 45, machine: 40, cable: 38, 'e-z curl bar': 35, kettlebells: 28, 'body only': 26, bands: 20, other: 15 }[e.equipment ?? ''] ?? 10;
 	const compound = e.mechanic === 'compound' ? 8 : 0;
 	const simple = e.level === 'beginner' ? 4 : e.level === 'intermediate' ? 2 : 0;
 	// Long names are almost always oddball variants
@@ -258,7 +343,14 @@ const OVERRIDES = {
 	'Plank': { priority: 80, aliases: [], cues: 'Glutes tight, ribs down, one long line. Breathe.' },
 	"Farmer's Walk": { priority: 80, aliases: ['Farmers Carry', 'Loaded Carry'], cues: 'Tall posture, crush grip, short quick steps.' },
 	'Bench Press - Powerlifting': { priority: 60, aliases: ['Competition Bench'], cues: '' },
-	'Barbell Full Squat': { priority: 90, aliases: ['ATG Squat', 'Deep Squat'], cues: 'Full depth. Big brace, drive the floor apart.' }
+	'Barbell Full Squat': { priority: 90, aliases: ['ATG Squat', 'Deep Squat'], cues: 'Full depth. Big brace, drive the floor apart.' },
+	'Bodyweight Squat': { priority: 38, aliases: ['Air Squat'], cues: 'Sit between the heels, chest tall. Pause at the bottom when it gets easy, then go to split squats.' },
+	'Natural Glute Ham Raise': { priority: 36, aliases: ['Nordic Curl', 'Nordic Hamstring Curl'], cues: 'Knees anchored, hips straight. Lower as slowly as you can, catch with the hands, pull back up.' },
+	// Searchable as a glute bridge, but no slot: the single-leg bridge already
+	// fills a floor gym's hip thrust, and a second one took the repeat a full
+	// gym's sixth day gives the barbell hip thrust.
+	'Butt Lift (Bridge)': { priority: 0, aliases: ['Glute Bridge'], cues: 'Heels close, ribs down. Drive through the heels to a full lockout and hold a beat.' },
+	'Inverted Row': { priority: 40, aliases: ['Bodyweight Row', 'Australian Pull-Up'], cues: 'Body in one line under a bar or rings. Pull the chest to the bar, squeeze the blades. Feet further forward makes it harder.' }
 };
 
 // ---------------------------------------------------------------------------
@@ -281,7 +373,8 @@ const misses = Object.keys(OVERRIDES).filter((n) => !exercises.some((e) => e.nam
 const seen = new Set();
 let patterned = 0;
 
-for (const e of [...exercises, ...SYNTHETIC]) {
+for (const raw of [...exercises, ...SYNTHETIC]) {
+	const e = normalize(raw);
 	const id = e.id ? String(e.id) : slugify(e.name);
 	if (seen.has(id)) continue;
 	seen.add(id);
@@ -289,7 +382,7 @@ for (const e of [...exercises, ...SYNTHETIC]) {
 	const { measurement, progression } = classify(e);
 	const ov = OVERRIDES[e.name];
 	const pat = ov ? (pattern(e) ?? fallbackPattern(e)) : pattern(e);
-	let prio = ov ? ov.priority : basePriority(e, pat);
+	let prio = ov ? ov.priority : (e._priority ?? basePriority(e, pat));
 	// A bench or push-up refiled as triceps work kept the priority it earned
 	// as a chest press, which outranked every real extension: a competition
 	// bench became the triceps isolation next to the day's dumbbell press.
@@ -308,7 +401,7 @@ for (const e of [...exercises, ...SYNTHETIC]) {
 	const UPSERT_COLS = [
 		'name', 'measurement', 'movement_pattern', 'progression', 'equipment',
 		'primary_muscles', 'secondary_muscles', 'unilateral', 'mechanic',
-		'level', 'priority', 'instructions', 'cues', 'image'
+		'level', 'priority', 'instructions', 'cues', 'image', 'requires_bar'
 	];
 	lines.push(
 		`INSERT INTO exercise (id,${UPSERT_COLS.join(',')}) VALUES (` +
@@ -326,6 +419,7 @@ for (const e of [...exercises, ...SYNTHETIC]) {
 			(cues ? `'${esc(cues)}'` : 'NULL') +
 			`,` +
 			(image ? `'${esc(image)}'` : 'NULL') +
+			`,${requiresBar(e)}` +
 			`) ON CONFLICT(id) DO UPDATE SET ` +
 			UPSERT_COLS.map((col) => `${col}=excluded.${col}`).join(',') +
 			`;`
