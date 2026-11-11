@@ -1,7 +1,7 @@
 // Weekly volume accounting and muscle staleness. There is no calendar:
 // a routine is a rotation, and "next" is whatever follows the last thing done.
 
-import type { RoutineDraft, SessionDraft } from './types.ts';
+import type { Exercise, RoutineDraft, SessionDraft } from './types.ts';
 import type { Profile } from './profiles.ts';
 
 // Collapse the dataset's 17 muscles into the groups a lifter thinks in.
@@ -108,6 +108,15 @@ function creditExercise(
 		if (g && !primaryGroups.has(g)) secondaryGroups.add(g);
 	}
 	for (const g of secondaryGroups) out[g] = (out[g] ?? 0) + sets * 0.5;
+}
+
+/** What one exercise at `sets` sets credits each group, by the weekly
+ *  table's own rules: so anything that guards a weekly number guards the
+ *  number the page will show. */
+export function creditFor(exercise: Exercise, sets: number): Record<string, number> {
+	const out: Record<string, number> = {};
+	creditExercise(out, exercise.primary_muscles, exercise.secondary_muscles, sets);
+	return out;
 }
 
 /**

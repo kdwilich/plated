@@ -103,14 +103,26 @@ const PATTERN_RULES = [
 	// rules further down purely on the literal word match.
 	[/turkish get-?up/i, null],
 	[/wrist|finger/i, null],
-	[/push-?up/i, 'horizontal_press'],
+	// Inverted body, overhead press: the vertical slot, not the bench slot.
+	[/handstand/i, 'vertical_press'],
+	// A press only fills the chest slot when chest is what it trains: floor
+	// presses and close-grip push-ups are triceps-primary in the dataset.
+	[/push-?up/i, chestOrTriceps],
 	[/incline.*(bench|press)|(bench|press).*incline/i, (e) => (has(e, 'chest') ? 'incline_press' : null)],
-	[/bench press|chest press|floor press|decline.*press/i, 'horizontal_press'],
+	// Before the bench rule, which otherwise claims it: close-grip bench is
+	// triceps-primary and filled a full body day's chest press.
 	[/close-grip.*bench/i, 'triceps_extension'],
-	[/dip machine|dips/i, (e) => (has(e, 'chest') ? 'horizontal_press' : 'triceps_extension')],
+	[/bench press|chest press|floor press|decline.*press/i, chestOrTriceps],
+	// Primary only: every dip lists chest as secondary, so has() put the
+	// triceps version in the chest-press slot ahead of push-ups.
+	[/dip machine|dips/i, chestOrTriceps],
 	[/shoulder press|military press|overhead press|push press|arnold press/i, 'vertical_press'],
 	[/pulldown|pull-?up|pullup|chin-?up|chinup/i, 'vertical_pull'],
-	[/pullover/i, 'pullover'],
+	// The pullover slot sits on pull day. Chest-primary pullovers put chest
+	// work there, so only the lats-primary ones qualify.
+	// Chest-primary ones file as chest flyes: still patterned, so logged sets
+	// keep counting toward volume, but never on pull day.
+	[/pullover/i, (e) => (e.primaryMuscles.includes('lats') ? 'pullover' : 'chest_fly')],
 	// "Incline Pushdown" is a straight-arm cable pullover variant (lats), not
 	// a triceps movement — the generic pushdown rule below would misclassify
 	// it as triceps_extension despite training no triceps at all.
@@ -152,6 +164,12 @@ const PATTERN_RULES = [
 	[/plank/i, 'anti_extension'],
 	[CARRY, 'loaded_carry']
 ];
+
+const REFILED_PRIORITY = 30;
+
+function chestOrTriceps(e) {
+	return e.primaryMuscles.includes('chest') ? 'horizontal_press' : 'triceps_extension';
+}
 
 function has(e, muscle) {
 	return e.primaryMuscles.includes(muscle) || e.secondaryMuscles.includes(muscle);
@@ -271,7 +289,16 @@ for (const e of [...exercises, ...SYNTHETIC]) {
 	const { measurement, progression } = classify(e);
 	const ov = OVERRIDES[e.name];
 	const pat = ov ? (pattern(e) ?? fallbackPattern(e)) : pattern(e);
-	const prio = ov ? ov.priority : basePriority(e, pat);
+	let prio = ov ? ov.priority : basePriority(e, pat);
+	// A bench or push-up refiled as triceps work kept the priority it earned
+	// as a chest press, which outranked every real extension: a competition
+	// bench became the triceps isolation next to the day's dumbbell press.
+	// Close-grip bench is the one deliberate triceps press.
+	if (pat === 'triceps_extension' && /press|push-?up/i.test(e.name) && e.name !== 'Close-Grip Barbell Bench Press') {
+		prio = Math.min(prio, REFILED_PRIORITY);
+	}
+	// Likewise a chest pullover filed as a fly sits behind the real flyes.
+	if (pat === 'chest_fly' && /pullover/i.test(e.name)) prio = Math.min(prio, REFILED_PRIORITY);
 	const aliases = ov?.aliases ?? e._aliases ?? [];
 	const cues = ov?.cues || e._cues || null;
 	const unilateral = /one-arm|one-leg|single-arm|single-leg|alternat|unilateral/i.test(e.name) ? 1 : 0;

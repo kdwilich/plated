@@ -4,7 +4,7 @@ import { getDb } from '$lib/server/db';
 import { getGym } from '$lib/server/gym';
 import { generatorCatalog } from '$lib/server/catalog';
 import { saveRoutineFromDraft } from '$lib/server/routines';
-import { defaultSplitStyle, generate, type Emphasis, type SplitStyle } from '$lib/training/generate';
+import { defaultSplitStyle, emptySessions, generate, isDraftShape, type Emphasis, type SplitStyle } from '$lib/training/generate';
 import { volumeSummary, volumeWarnings, weeklySetsByGroup } from '$lib/training/volume';
 import { PROFILES } from '$lib/training/profiles';
 import type { RoutineDraft } from '$lib/training/types';
@@ -68,8 +68,15 @@ export const actions: Actions = {
 		let draft: RoutineDraft;
 		try {
 			draft = JSON.parse(raw);
+			if (!isDraftShape(draft)) throw new Error('not a draft');
 		} catch {
 			return fail(400, { error: 'Malformed draft.' });
+		}
+		const empty = emptySessions(draft);
+		if (empty.length > 0) {
+			return fail(400, {
+				error: `${empty.map((n) => `"${n}"`).join(', ')} ${empty.length === 1 ? 'has' : 'have'} no exercises. Add equipment or pick fewer days first.`
+			});
 		}
 		const uid = locals.user!.id;
 		const gym = await getGym(db, uid);

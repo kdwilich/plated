@@ -198,7 +198,13 @@
 		<form method="POST" action="?/save" use:enhance>
 			<input type="hidden" name="draft" value={JSON.stringify(form.draft)} />
 			<input type="text" name="name" placeholder="Routine name" value="{form.days}-day split" />
-			<button class="btn primary submit" type="submit">Save as active routine</button>
+			<!-- A session with no exercises is a training day you cannot train;
+			     the warnings above name it, and the server refuses it too. -->
+			<button
+				class="btn primary submit"
+				type="submit"
+				disabled={form.draft.sessions.some((s) => s.exercises.length === 0)}
+			>Save as active routine</button>
 		</form>
 	</section>
 {/if}
