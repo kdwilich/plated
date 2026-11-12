@@ -978,3 +978,24 @@ test('a bar gym fills every session; a floor gym only comes up short on a pull d
 		for (const name of empty) assert.match(name, /^Pull/, `floor ${JSON.stringify(c)}`);
 	}
 });
+
+// --- Chains -------------------------------------------------------------------
+
+test('a chain rung (priority 0) is never handed out, even when it is the only candidate', () => {
+	const rung = (pattern: MovementPattern, muscles: string[]): Exercise => ({
+		...ex(pattern, 'body only', muscles, 0),
+		id: `rung-${pattern}`,
+		name: `Rung ${pattern}`,
+		measurement: 'reps_only'
+	});
+	// Squat and leg curl rungs beside the usual floor, and a fly rung where
+	// the floor has nothing else for the slot.
+	const catalog = [...bodyweight(), rung('squat', ['quadriceps']), rung('leg_curl', ['hamstrings']), rung('chest_fly', ['chest'])];
+	for (const c of COMBOS) {
+		for (const equipment of [['body only'], ['body only', 'pull-up bar']]) {
+			const draft = generate({ ...c, equipment, catalog });
+			const picked = draft.sessions.flatMap((s) => s.exercises).filter((e) => e.exercise.priority <= 0);
+			assert.deepEqual(picked.map((e) => e.exercise.name), [], JSON.stringify({ ...c, equipment }));
+		}
+	}
+});

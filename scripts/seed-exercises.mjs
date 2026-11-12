@@ -30,6 +30,10 @@ const exercises = JSON.parse(readFileSync(SRC, 'utf8'));
 // one id instead of fragmenting across the dataset's eleven cardio rows. No
 // movement_pattern on purpose: the generator cannot slot it, volume cannot
 // count it and recommendations cannot suggest it. A mile is not a leg set.
+// Zero: the generator skips patterned rows at 0, so a rung earns volume
+// when logged but only a chain ever reaches it.
+const RUNG_PRIORITY = 0;
+
 const SYNTHETIC = [
 	{
 		id: 'run',
@@ -107,8 +111,53 @@ const SYNTHETIC = [
 		_priority: 45,
 		_aliases: ['Pike Pushup'],
 		_cues: 'Hips high, head travels forward of the hands into a tripod. Feet on a box makes it harder; a wall handstand is the next step.'
-	}
+	},
+	// Chain rungs (training/chains.ts). Priority 0 keeps them out of every
+	// split: you get to an archer push-up by earning it, not by a split
+	// handing it out.
+	rung('bw-archer-push-up', 'Archer Push-Up', ['chest'], ['triceps', 'shoulders'], 'intermediate',
+		'Hands twice shoulder width. Lower toward one hand while the other arm stays straight; alternate sides. Reps count per side.'),
+	rung('bw-negative-pull-up', 'Negative Pull-Up', ['lats'], ['biceps', 'middle back'], 'beginner',
+		'Jump or step to the top, chin over the bar. Lower for a slow five count to a dead hang. Reset; every rep starts at the top.'),
+	rung('bw-feet-elevated-inverted-row', 'Feet-Elevated Inverted Row', ['middle back'], ['lats', 'biceps'], 'intermediate',
+		'Heels on a box, body one line under the bar. Pull the chest to the bar and squeeze the blades.'),
+	rung('bw-archer-inverted-row', 'Archer Inverted Row', ['middle back'], ['lats', 'biceps'], 'expert',
+		'Wide grip. Pull toward one hand while the other arm straightens along the bar; alternate sides. Reps count per side.'),
+	rung('bw-box-pistol-squat', 'Box Pistol Squat', ['quadriceps'], ['glutes', 'hamstrings'], 'intermediate',
+		'One leg out in front, sit down to a box under control and stand back up without rocking. A lower box is the next step. Reps count per side.'),
+	rung('bw-pistol-squat', 'Pistol Squat', ['quadriceps'], ['glutes', 'hamstrings'], 'expert',
+		'Free leg straight out, arms forward. Sit all the way down on one leg, heel flat, and stand without a bounce. Reps count per side.'),
+	rung('bw-nordic-negative', 'Nordic Curl Negative', ['hamstrings'], ['calves'], 'intermediate',
+		'Knees on a pad, heels anchored. Hips straight, lower as slowly as you can, catch with the hands and push back to the top.'),
+	rung('bw-hanging-knee-raise', 'Hanging Knee Raise', ['abdominals'], [], 'beginner',
+		'Dead hang, shoulders active. Curl the pelvis up and bring the knees to the chest. Lower slowly, no swing.'),
+	rung('bw-toes-to-bar', 'Toes-to-Bar', ['abdominals'], ['lats'], 'expert',
+		'From a still hang, press the bar down and lift straight legs until the toes touch it. Lower under control.'),
+	rung('bw-tuck-l-sit', 'Tuck L-Sit', ['abdominals'], ['triceps', 'quadriceps'], 'beginner',
+		'Hands on the floor or parallettes, arms locked, shoulders pushed down. Lift the hips and hold the knees tucked to the chest.'),
+	rung('bw-l-sit', 'L-Sit', ['abdominals'], ['triceps', 'quadriceps'], 'intermediate',
+		'Arms locked, shoulders down, legs straight and level with the floor. Point the toes and hold.'),
+	rung('bw-elevated-pike-push-up', 'Elevated Pike Push-Up', ['shoulders'], ['triceps'], 'intermediate',
+		'Feet on a box, hips stacked over the shoulders. Head travels forward of the hands into a tripod. A wall handstand push-up is the next step.')
 ];
+
+function rung(id, name, primaryMuscles, secondaryMuscles, level, cues) {
+	return {
+		id,
+		name,
+		category: 'strength',
+		equipment: 'body only',
+		primaryMuscles,
+		secondaryMuscles,
+		mechanic: 'compound',
+		level,
+		instructions: [],
+		images: [],
+		_priority: RUNG_PRIORITY,
+		_aliases: [],
+		_cues: cues
+	};
+}
 
 // A strength row with no equipment in the dataset is a no-kit exercise.
 // Leaving it null hid the inverted row and the walking lunge from every gym.
@@ -118,7 +167,7 @@ const normalize = (e) =>
 // Body-only work that needs something to hang from or press on. Kept beside
 // `equipment` rather than replacing it: net load and increments key off
 // 'body only', and a pull-up is still bodyweight.
-const BAR = /pull-?up|pullup|chin-?up|chinup|gorilla chin|hanging|\bdips\b|parallel bars|inverted row|muscle-?up/i;
+const BAR = /pull-?up|pullup|chin-?up|chinup|gorilla chin|hanging|toes-to-bar|\bdips\b|parallel bars|inverted row|muscle-?up/i;
 const requiresBar = (e) => (e.equipment === 'body only' && BAR.test(e.name) && !/bench dips/i.test(e.name) ? 1 : 0);
 
 // ---------------------------------------------------------------------------
@@ -222,6 +271,7 @@ const PATTERN_RULES = [
 	// Nordic-style: the knee flexes against bodyweight, which is a leg curl.
 	// Body-only rows only: the machine version stays out of a full gym's
 	// leg curl rotation, which this slice does not touch.
+	[/nordic/i, 'leg_curl'],
 	[/glute[- ]ham raise/i, (e) => (e.equipment === 'body only' ? 'leg_curl' : null)],
 	[/split squat|bulgarian/i, 'lunge'],
 	// Calf press on the leg press machine is a calf isolation exercise, not a
@@ -243,7 +293,10 @@ const PATTERN_RULES = [
 	[/kickback/i, (e) => (has(e, 'triceps') ? 'triceps_extension' : null)],
 	[/pushdown|push-down|skullcrusher|french press|triceps? extension/i, 'triceps_extension'],
 	[/cable crunch|crunch|sit-?up|leg raise|knee raise|russian twist|ab roller|rollout/i, 'ab_flexion'],
+	[/toes-to-bar/i, 'ab_flexion'],
 	[/plank/i, 'anti_extension'],
+	// A held brace, like the plank: the slot a static earns volume in.
+	[/l-sit/i, 'anti_extension'],
 	[CARRY, 'loaded_carry']
 ];
 
@@ -394,7 +447,7 @@ for (const raw of [...exercises, ...SYNTHETIC]) {
 	if (pat === 'chest_fly' && /pullover/i.test(e.name)) prio = Math.min(prio, REFILED_PRIORITY);
 	const aliases = ov?.aliases ?? e._aliases ?? [];
 	const cues = ov?.cues || e._cues || null;
-	const unilateral = /one-arm|one-leg|single-arm|single-leg|alternat|unilateral/i.test(e.name) ? 1 : 0;
+	const unilateral = /one-arm|one-leg|single-arm|single-leg|alternat|unilateral|archer|pistol/i.test(e.name) ? 1 : 0;
 	const image = e.images?.[0] ?? null;
 	if (pat) patterned++;
 

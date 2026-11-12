@@ -452,6 +452,9 @@ export function generate(input: GenerateInput): RoutineDraft {
 	const byPattern = new Map<MovementPattern, Exercise[]>();
 	for (const e of input.catalog) {
 		if (!e.movement_pattern) continue;
+		// Priority 0 is a chain rung: patterned so its sets count, reached by
+		// moving up a chain, never handed out by a split.
+		if (e.priority <= 0) continue;
 		if (e.equipment && !equipment.has(e.equipment)) continue;
 		if (e.requires_bar && !equipment.has(BAR_KEY)) continue;
 		const list = byPattern.get(e.movement_pattern) ?? [];

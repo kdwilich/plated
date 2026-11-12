@@ -1,0 +1,45 @@
+-- Chain rungs (slice 5, training/chains.ts). Same rows seed.sql upserts,
+-- inserted only where missing so a re-seed and this agree. Priority 0:
+-- the generator skips them; only a chain reaches them.
+
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-archer-push-up','Archer Push-Up','reps_only','horizontal_press','double','body only','["chest"]','["triceps","shoulders"]',1,'compound','intermediate',0,NULL,'Hands twice shoulder width. Lower toward one hand while the other arm stays straight; alternate sides. Reps count per side.',NULL,0);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-negative-pull-up','Negative Pull-Up','reps_only','vertical_pull','double','body only','["lats"]','["biceps","middle back"]',0,'compound','beginner',0,NULL,'Jump or step to the top, chin over the bar. Lower for a slow five count to a dead hang. Reset; every rep starts at the top.',NULL,1);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-feet-elevated-inverted-row','Feet-Elevated Inverted Row','reps_only','horizontal_pull','double','body only','["middle back"]','["lats","biceps"]',0,'compound','intermediate',0,NULL,'Heels on a box, body one line under the bar. Pull the chest to the bar and squeeze the blades.',NULL,1);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-archer-inverted-row','Archer Inverted Row','reps_only','horizontal_pull','double','body only','["middle back"]','["lats","biceps"]',1,'compound','expert',0,NULL,'Wide grip. Pull toward one hand while the other arm straightens along the bar; alternate sides. Reps count per side.',NULL,1);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-box-pistol-squat','Box Pistol Squat','reps_only','squat','double','body only','["quadriceps"]','["glutes","hamstrings"]',1,'compound','intermediate',0,NULL,'One leg out in front, sit down to a box under control and stand back up without rocking. A lower box is the next step. Reps count per side.',NULL,0);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-pistol-squat','Pistol Squat','reps_only','squat','double','body only','["quadriceps"]','["glutes","hamstrings"]',1,'compound','expert',0,NULL,'Free leg straight out, arms forward. Sit all the way down on one leg, heel flat, and stand without a bounce. Reps count per side.',NULL,0);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-nordic-negative','Nordic Curl Negative','reps_only','leg_curl','double','body only','["hamstrings"]','["calves"]',0,'compound','intermediate',0,NULL,'Knees on a pad, heels anchored. Hips straight, lower as slowly as you can, catch with the hands and push back to the top.',NULL,0);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-hanging-knee-raise','Hanging Knee Raise','reps_only','ab_flexion','double','body only','["abdominals"]','[]',0,'compound','beginner',0,NULL,'Dead hang, shoulders active. Curl the pelvis up and bring the knees to the chest. Lower slowly, no swing.',NULL,1);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-toes-to-bar','Toes-to-Bar','reps_only','ab_flexion','double','body only','["abdominals"]','["lats"]',0,'compound','expert',0,NULL,'From a still hang, press the bar down and lift straight legs until the toes touch it. Lower under control.',NULL,1);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-tuck-l-sit','Tuck L-Sit','time','anti_extension','time','body only','["abdominals"]','["triceps","quadriceps"]',0,'compound','beginner',0,NULL,'Hands on the floor or parallettes, arms locked, shoulders pushed down. Lift the hips and hold the knees tucked to the chest.',NULL,0);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-l-sit','L-Sit','time','anti_extension','time','body only','["abdominals"]','["triceps","quadriceps"]',0,'compound','intermediate',0,NULL,'Arms locked, shoulders down, legs straight and level with the floor. Point the toes and hold.',NULL,0);
+INSERT OR IGNORE INTO exercise (id,name,measurement,movement_pattern,progression,equipment,primary_muscles,secondary_muscles,unilateral,mechanic,level,priority,instructions,cues,image,requires_bar) VALUES ('bw-elevated-pike-push-up','Elevated Pike Push-Up','reps_only','vertical_press','double','body only','["shoulders"]','["triceps"]',0,'compound','intermediate',0,NULL,'Feet on a box, hips stacked over the shoulders. Head travels forward of the hands into a tripod. A wall handstand push-up is the next step.',NULL,0);
+
+-- A pistol squat is one leg at a time, whatever it is loaded with.
+UPDATE exercise SET unilateral = 1 WHERE id IN ('Kettlebell_Pistol_Squat', 'Smith_Machine_Pistol_Squat');
+
+-- Searchable. Guarded: on a fresh database this runs before seed.sql.
+DELETE FROM exercise_fts WHERE id = 'bw-archer-push-up';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-archer-push-up', 'Archer Push-Up', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-archer-push-up');
+DELETE FROM exercise_fts WHERE id = 'bw-negative-pull-up';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-negative-pull-up', 'Negative Pull-Up', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-negative-pull-up');
+DELETE FROM exercise_fts WHERE id = 'bw-feet-elevated-inverted-row';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-feet-elevated-inverted-row', 'Feet-Elevated Inverted Row', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-feet-elevated-inverted-row');
+DELETE FROM exercise_fts WHERE id = 'bw-archer-inverted-row';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-archer-inverted-row', 'Archer Inverted Row', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-archer-inverted-row');
+DELETE FROM exercise_fts WHERE id = 'bw-box-pistol-squat';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-box-pistol-squat', 'Box Pistol Squat', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-box-pistol-squat');
+DELETE FROM exercise_fts WHERE id = 'bw-pistol-squat';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-pistol-squat', 'Pistol Squat', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-pistol-squat');
+DELETE FROM exercise_fts WHERE id = 'bw-nordic-negative';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-nordic-negative', 'Nordic Curl Negative', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-nordic-negative');
+DELETE FROM exercise_fts WHERE id = 'bw-hanging-knee-raise';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-hanging-knee-raise', 'Hanging Knee Raise', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-hanging-knee-raise');
+DELETE FROM exercise_fts WHERE id = 'bw-toes-to-bar';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-toes-to-bar', 'Toes-to-Bar', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-toes-to-bar');
+DELETE FROM exercise_fts WHERE id = 'bw-tuck-l-sit';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-tuck-l-sit', 'Tuck L-Sit', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-tuck-l-sit');
+DELETE FROM exercise_fts WHERE id = 'bw-l-sit';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-l-sit', 'L-Sit', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-l-sit');
+DELETE FROM exercise_fts WHERE id = 'bw-elevated-pike-push-up';
+INSERT INTO exercise_fts (id, name, aliases) SELECT 'bw-elevated-pike-push-up', 'Elevated Pike Push-Up', '' WHERE EXISTS (SELECT 1 FROM exercise WHERE id = 'bw-elevated-pike-push-up');

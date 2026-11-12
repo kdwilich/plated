@@ -53,11 +53,21 @@ export interface ActiveSession {
 	/** Mobility drills ticked off this session. Local only — never synced to
 	 *  D1, never in history, invisible to volume and progression. */
 	mobility_done?: string[];
+	/** Rungs moved this session; they reach the routine with the workout. */
+	rung_changes?: RungChange[];
 	gym: {
 		plates: { denomination_lb: number; pairs: number }[];
 		dumbbell_step_lb: number;
 		machine_step_lb: number;
+		/** For the bar check on a chain step. Missing on sessions stored
+		 *  before it existed, which treat the bar as present. */
+		equipment?: string[];
 	};
+}
+
+export interface RungChange {
+	from: string;
+	to: string;
 }
 
 // Deliberately NOT renamed with the app. This is the key an existing phone's
@@ -172,6 +182,18 @@ export interface OutboxEntry {
 		effort?: number | null;
 	};
 	sets: ActiveSet[];
+	/** "Move up" / "Move down" taken in the logger. Optional on the wire. */
+	rung_changes?: RungChange[];
+}
+
+/**
+ * Note a rung step for the routine. Stepping straight back undoes it rather
+ * than queueing a round trip.
+ */
+export function recordRungChange(session: ActiveSession, change: RungChange): void {
+	const list = session.rung_changes ?? [];
+	const back = list.findIndex((c) => c.from === change.to && c.to === change.from);
+	session.rung_changes = back === -1 ? [...list, change] : list.filter((_, i) => i !== back);
 }
 
 export function toPayload(session: ActiveSession): OutboxEntry {
@@ -186,7 +208,8 @@ export function toPayload(session: ActiveSession): OutboxEntry {
 			run_type: null,
 			effort: null
 		},
-		sets: session.sets
+		sets: session.sets,
+		rung_changes: session.rung_changes ?? []
 	};
 }
 

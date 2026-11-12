@@ -7,13 +7,15 @@
 		drainOutbox,
 		enqueue,
 		loadActive,
+		recordRungChange,
 		saveActive,
 		toPayload,
 		type ActiveExercise,
 		type ActiveSession
 	} from '$lib/client/session';
 	import { solve } from '$lib/training/plates';
-	import { suggest, type Suggestion } from '$lib/training/progression';
+	import type { Suggestion } from '$lib/training/progression';
+	import { chainOf, placeLabel, suggestChain, type ChainStep } from '$lib/training/chains';
 	import { ramp } from '$lib/training/warmup';
 	import { mobility } from '$lib/training/mobility';
 	import type { LoggedSet, ProgressionKind } from '$lib/training/types';
@@ -37,6 +39,8 @@
 	// Edit mode: today's list only. Nothing here reaches the routine.
 	let editing = $state(false);
 	let swapping = $state<string | null>(null);
+	// The exercise whose Move up / Move down is waiting on its second tap.
+	let confirmingStep = $state<string | null>(null);
 
 	// Recomputes as exercises are added, so a freestyle session's warm-up grows
 	// with it instead of staying general forever.
@@ -83,15 +87,48 @@
 		};
 	}
 
-	function suggestionFor(ex: ActiveExercise): Suggestion | null {
-		return suggest(
-			ex.history as LoggedSet[][],
-			ex.rep_min ?? 8,
-			ex.rep_max ?? 12,
-			ex.progression as ProgressionKind,
-			ex.increment_lb,
-			allowsNegativeLoad(ex)
-		);
+	// A gym snapshot from before the bar check existed counts as having one.
+	const hasBar = () => session?.gym.equipment?.includes('pull-up bar') ?? true;
+
+	function progressFor(ex: ActiveExercise): { step: ChainStep | null; suggestion: Suggestion | null } {
+		return suggestChain({
+			exercise_id: ex.exercise_id,
+			sessions: ex.history as LoggedSet[][],
+			target_sets: ex.target_sets,
+			rep_min: ex.rep_min ?? 8,
+			rep_max: ex.rep_max ?? 12,
+			kind: ex.progression as ProgressionKind,
+			increment_lb: ex.increment_lb,
+			is_net_load: allowsNegativeLoad(ex),
+			uses_load: usesLoad(ex),
+			has_bar: hasBar()
+		});
+	}
+
+	const suggestionFor = (ex: ActiveExercise) => progressFor(ex).suggestion;
+
+	/** The step on offer, while it can still be taken: before any set is
+	 *  logged, and only if the rung is not already on today's list. */
+	function stepFor(ex: ActiveExercise): ChainStep | null {
+		const step = progressFor(ex).step;
+		if (!step || setsFor(ex).length > 0) return null;
+		if (session?.exercises.some((e) => e.exercise_id === step.rung.exercise_id)) return null;
+		return step;
+	}
+
+	async function takeStep(ex: ActiveExercise, step: ChainStep) {
+		if (!session) return;
+		confirmingStep = null;
+		const to = step.rung.exercise_id;
+		await swapExercise(ex, { id: to } as ExerciseRow);
+		// The swap needs the network; offline it leaves the list alone, and so
+		// does this.
+		if (!session.exercises.some((e) => e.exercise_id === to)) return;
+		if (session.routine_session_id) recordRungChange(session, { from: ex.exercise_id, to });
+		await saveActive(session);
+		openId = to;
+		const next = session.exercises.find((e) => e.exercise_id === to);
+		if (next) primeInputs(next);
 	}
 
 	function lastLine(ex: ActiveExercise): string | null {
@@ -278,12 +315,19 @@
 		{@const working = logged.filter((s) => !s.is_warmup)}
 		{@const open = openId === ex.exercise_id}
 		{@const sugg = suggestionFor(ex)}
+		{@const place = chainOf(ex.exercise_id)}
+		{@const step = editing ? null : stepFor(ex)}
 		<section class="exercise card" class:done={working.length >= ex.target_sets}>
 			<div class="exercise-head-row">
 				<button class="exercise-head" disabled={editing} onclick={() => toggle(ex)}>
 					<span class="head-main">
 						<span class="exercise-name">{ex.name}</span>
 						{#if lastLine(ex)}<span class="last num">{lastLine(ex)}</span>{/if}
+						{#if place}
+							<span class="rung num" class:ready={step}>
+								{placeLabel(place)}{step ? ` · MOVE ${step.direction.toUpperCase()}` : ''}
+							</span>
+						{/if}
 					</span>
 					<span class="progress num">{working.length}/{ex.target_sets}</span>
 				</button>
@@ -317,6 +361,24 @@
 
 			{#if open}
 				<div class="body">
+					{#if step}
+						<div class="step" class:down={step.direction === 'down'}>
+							<p class="step-why">{step.note}</p>
+							{#if confirmingStep === ex.exercise_id}
+								<div class="step-actions">
+									<button class="btn primary" onclick={() => takeStep(ex, step)}>
+										Confirm · {session.routine_session_id ? 'routine updates too' : 'today only'}
+									</button>
+									<button class="btn quiet" onclick={() => (confirmingStep = null)}>Not yet</button>
+								</div>
+							{:else}
+								<button class="btn" onclick={() => (confirmingStep = ex.exercise_id)}>
+									Move {step.direction}: {step.rung.name}
+								</button>
+							{/if}
+						</div>
+					{/if}
+
 					{#if sugg?.note || sugg?.type === 'deload'}
 						<p class="note" class:deload={sugg.type === 'deload'}>{sugg.note}</p>
 					{/if}
@@ -578,6 +640,35 @@
 		gap: $space-4;
 		border-top: 1px solid $hairline-faint;
 		padding-top: $space-4;
+	}
+
+	.rung {
+		font-size: 11px;
+		color: $text-faint;
+		letter-spacing: 0.04em;
+
+		&.ready {
+			color: $signal;
+		}
+	}
+
+	.step {
+		display: flex;
+		flex-direction: column;
+		gap: $space-2;
+		padding-bottom: $space-3;
+		border-bottom: 1px solid $hairline;
+	}
+
+	.step-why {
+		font-size: 13px;
+		color: $text-dim;
+	}
+
+	.step-actions {
+		display: flex;
+		gap: $space-2;
+		flex-wrap: wrap;
 	}
 
 	.note {

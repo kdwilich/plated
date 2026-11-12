@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { ingestWorkout, runFieldsValid, type SyncPayload } from '$lib/server/workouts';
+import { applyRungChanges } from '$lib/server/routines';
 
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const db = getDb(platform);
@@ -19,5 +20,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// 409 rather than a silent ok: the outbox only deletes on success, so a
 	// workout belonging to another account keeps until that account signs in.
 	if (!stored) return json({ ok: false, error: 'not yours' }, { status: 409 });
+	// After the workout, so a rung only moves once the session that earned it
+	// is on record.
+	await applyRungChanges(db, locals.user!.id, payload.workout.routine_session_id, payload.rung_changes);
 	return json({ ok: true, id: payload.workout.id });
 };

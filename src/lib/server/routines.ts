@@ -1,5 +1,6 @@
 import type { RoutineDraft } from '../training/types.ts';
 import { PROFILES } from '../training/profiles.ts';
+import { areNeighbours } from '../training/chains.ts';
 import type { ExerciseRow } from './catalog.ts';
 
 export interface RoutineExerciseRow {
@@ -409,6 +410,34 @@ export async function updateRoutineExercise(
 		.prepare(`UPDATE routine_exercise SET ${sets.join(', ')} WHERE id = ? AND ${OWNED_EXERCISE}`)
 		.bind(...binds)
 		.run();
+}
+
+/**
+ * A rung change taken in the logger ("Move up: Archer Push-Up"), applied to
+ * the routine day the workout came from. It rides the outbox with the
+ * workout, so it lands whenever the workout does. Only one step along a
+ * chain is honoured; anything else in the payload is ignored. Replaying it is
+ * a no-op, because `from` is no longer on the day. Skipped when `to` is
+ * already on the day: two rows of the same exercise is not a routine.
+ */
+export async function applyRungChanges(
+	db: D1Database,
+	userId: number,
+	sessionId: string | null,
+	changes: { from: string; to: string }[] | undefined
+): Promise<void> {
+	if (!sessionId || !Array.isArray(changes)) return;
+	for (const c of changes) {
+		if (typeof c?.from !== 'string' || typeof c?.to !== 'string' || !areNeighbours(c.from, c.to)) continue;
+		await db
+			.prepare(
+				`UPDATE routine_exercise SET exercise_id = ?
+				 WHERE session_id = ? AND exercise_id = ? AND ${OWNED_EXERCISE}
+				   AND NOT EXISTS (SELECT 1 FROM routine_exercise WHERE session_id = ? AND exercise_id = ?)`
+			)
+			.bind(c.to, sessionId, c.from, userId, sessionId, c.to)
+			.run();
+	}
 }
 
 export async function deleteRoutineExercise(

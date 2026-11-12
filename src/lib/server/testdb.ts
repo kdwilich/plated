@@ -63,6 +63,7 @@ export function testDb(): D1Database {
 	db.exec(d1('migrations/0003_seed_run.sql'));
 	db.exec(d1('migrations/0004_pattern_fixes.sql'));
 	db.exec(d1('migrations/0005_bodyweight.sql'));
+	db.exec(d1('migrations/0006_chain_rungs.sql'));
 
 	return {
 		prepare: (sql: string) => new Stmt(db, sql),

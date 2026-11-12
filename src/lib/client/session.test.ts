@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hasLoggedWork, workSummary, type ActiveSession, type ActiveSet } from './session.ts';
+import { hasLoggedWork, recordRungChange, toPayload, workSummary, type ActiveSession, type ActiveSet } from './session.ts';
 
 const set = (over: Partial<ActiveSet> = {}): ActiveSet => ({
 	id: 's1',
@@ -63,4 +63,17 @@ test('the summary lists everything the session holds', () => {
 
 test('an untouched session summarises to nothing at all', () => {
 	assert.equal(workSummary(session()), '');
+});
+
+test('a rung step rides the payload, and stepping straight back cancels it', () => {
+	const s = session();
+	assert.deepEqual(toPayload(s).rung_changes, [], 'older sessions have none');
+	recordRungChange(s, { from: 'Pushups', to: 'Push-Ups_With_Feet_Elevated' });
+	recordRungChange(s, { from: 'Inverted_Row', to: 'bw-feet-elevated-inverted-row' });
+	assert.deepEqual(toPayload(s).rung_changes, [
+		{ from: 'Pushups', to: 'Push-Ups_With_Feet_Elevated' },
+		{ from: 'Inverted_Row', to: 'bw-feet-elevated-inverted-row' }
+	]);
+	recordRungChange(s, { from: 'Push-Ups_With_Feet_Elevated', to: 'Pushups' });
+	assert.deepEqual(toPayload(s).rung_changes, [{ from: 'Inverted_Row', to: 'bw-feet-elevated-inverted-row' }]);
 });

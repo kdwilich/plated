@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { testDb } from './testdb.ts';
 import {
 	activateRoutine,
+	applyRungChanges,
 	addRoutineExercise,
 	addRoutineSession,
 	createRoutine,
@@ -216,4 +217,58 @@ test('a session scaffold is refused for another user\'s day', async () => {
 	const mine = await sessionScaffold(db, 2, day.id);
 	assert.equal(mine?.name, 'Push');
 	assert.equal(mine?.exercises.length, 1);
+});
+
+async function dayWith(db: D1Database, userId: number, ...ids: string[]) {
+	for (const id of ids) {
+		if (!(await db.prepare('SELECT 1 FROM exercise WHERE id = ?').bind(id).first())) await seedExercise(db, id);
+	}
+	const routine = await createRoutine(db, userId, 'Floor', 'hypertrophy', null);
+	await addRoutineSession(db, userId, routine, 'Upper');
+	const day = (await getRoutine(db, userId, routine))!.sessions[0];
+	for (const id of ids) await addRoutineExercise(db, userId, day.id, id, RX);
+	const ids_ = async () => (await getRoutine(db, userId, routine))!.sessions[0].exercises.map((e) => e.exercise_id);
+	return { day: day.id, ids: ids_ };
+}
+
+test('a rung change moves the routine day to the next rung, prescription kept', async () => {
+	const db = testDb();
+	const { day, ids } = await dayWith(db, 1, 'Pushups', 'Inverted_Row');
+	await seedExercise(db, 'Push-Ups_With_Feet_Elevated');
+	await applyRungChanges(db, 1, day, [{ from: 'Pushups', to: 'Push-Ups_With_Feet_Elevated' }]);
+	assert.deepEqual(await ids(), ['Push-Ups_With_Feet_Elevated', 'Inverted_Row']);
+	// Replaying the same outbox entry changes nothing.
+	await applyRungChanges(db, 1, day, [{ from: 'Pushups', to: 'Push-Ups_With_Feet_Elevated' }]);
+	assert.deepEqual(await ids(), ['Push-Ups_With_Feet_Elevated', 'Inverted_Row']);
+	const routine = await db.prepare('SELECT target_sets, rep_min, rep_max FROM routine_exercise WHERE session_id = ? AND position = 0').bind(day).first();
+	assert.deepEqual({ ...routine }, { target_sets: 3, rep_min: 6, rep_max: 10 });
+});
+
+test('a rung change that is not one step along a chain is ignored', async () => {
+	const db = testDb();
+	const { day, ids } = await dayWith(db, 1, 'Pushups');
+	await applyRungChanges(db, 1, day, [
+		{ from: 'Pushups', to: 'bw-archer-push-up' },
+		{ from: 'Pushups', to: 'Barbell_Squat' }
+	]);
+	assert.deepEqual(await ids(), ['Pushups']);
+});
+
+test('a rung change never touches another user\'s routine', async () => {
+	const db = testDb();
+	const { day, ids } = await dayWith(db, 2, 'Pushups');
+	await applyRungChanges(db, 1, day, [{ from: 'Pushups', to: 'Incline_Push-Up' }]);
+	assert.deepEqual(await ids(), ['Pushups']);
+});
+
+test('a rung change will not put the same exercise on a day twice', async () => {
+	const db = testDb();
+	const { day, ids } = await dayWith(db, 1, 'Pushups', 'Incline_Push-Up');
+	await applyRungChanges(db, 1, day, [{ from: 'Pushups', to: 'Incline_Push-Up' }]);
+	assert.deepEqual(await ids(), ['Pushups', 'Incline_Push-Up']);
+});
+
+test('a freestyle workout has no day to change', async () => {
+	const db = testDb();
+	await applyRungChanges(db, 1, null, [{ from: 'Pushups', to: 'Incline_Push-Up' }]);
 });

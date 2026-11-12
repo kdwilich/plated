@@ -26,6 +26,9 @@ export interface SyncPayload {
 		is_warmup: boolean;
 		completed_at: string;
 	}[];
+	/** Rungs moved in the logger, applied to the routine day on sync.
+	 *  Optional: older outbox entries have none. */
+	rung_changes?: { from: string; to: string }[];
 }
 
 /**

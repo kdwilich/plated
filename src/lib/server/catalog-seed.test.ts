@@ -95,14 +95,35 @@ test('migration 0005 sets every row it touches to what the seed says', () => {
 	}
 });
 
-test('migration 0005 tags every bar row and inserts every staple', () => {
-	const sql = d1('migrations/0005_bodyweight.sql');
+test('the migrations tag every bar row and insert every synthetic row', () => {
+	// A live database never re-runs seed.sql, so whatever the seed adds or tags
+	// has to reach it through a migration.
+	const sql = d1('migrations/0005_bodyweight.sql') + d1('migrations/0006_chain_rungs.sql');
 	for (const r of db.prepare('SELECT id FROM exercise WHERE requires_bar = 1').all() as Row[]) {
-		assert.ok(sql.includes(`'${r.id}'`), `${r.id} is requires_bar in seed.sql but not in 0005`);
+		assert.ok(sql.includes(`'${r.id}'`), `${r.id} is requires_bar in seed.sql but in no migration`);
 	}
 	for (const r of db.prepare("SELECT id FROM exercise WHERE id LIKE 'bw-%'").all() as Row[]) {
-		assert.ok(sql.includes(`INSERT OR IGNORE INTO exercise (`) && sql.includes(`'${r.id}'`), r.id);
+		assert.ok(new RegExp(`INSERT OR IGNORE INTO exercise \\([^)]*\\) VALUES \\('${r.id}'`).test(sql), r.id);
 	}
+});
+
+test('a database before 0006 plus 0006 has the chain rungs exactly as the seed does', () => {
+	// The live path: 0006 runs against a catalog seeded before the rungs existed.
+	const live = new DatabaseSync(':memory:');
+	live.exec(d1('schema.sql'));
+	for (const m of readdirSync(new URL('../../../d1/migrations', import.meta.url)).sort()) {
+		if (m < '0006') live.exec(d1(`migrations/${m}`));
+	}
+	live.exec("INSERT INTO exercise (id, name, measurement, progression, primary_muscles, unilateral) VALUES ('Kettlebell_Pistol_Squat', 'Kettlebell Pistol Squat', 'load_reps', 'double', '[]', 0)");
+	live.exec(d1('migrations/0006_chain_rungs.sql'));
+	const rungs = db.prepare("SELECT * FROM exercise WHERE priority = 0 AND movement_pattern IS NOT NULL ORDER BY id").all() as Record<string, unknown>[];
+	assert.equal(rungs.length, 12);
+	for (const want of rungs) {
+		assert.deepEqual({ ...(live.prepare('SELECT * FROM exercise WHERE id = ?').get(want.id as string) as object) }, { ...want }, want.id as string);
+		const fts = live.prepare('SELECT name FROM exercise_fts WHERE id = ?').get(want.id as string) as { name: string } | undefined;
+		assert.equal(fts?.name, want.name, `${want.id} searchable`);
+	}
+	assert.equal((live.prepare("SELECT unilateral u FROM exercise WHERE id = 'Kettlebell_Pistol_Squat'").get() as { u: number }).u, 1);
 });
 
 test('migration 0005 gives every gym with bodyweight work the bar, and only those', () => {

@@ -1,6 +1,6 @@
 # Running, bodyweight, and what the app is
 
-**Status:** direction accepted 2026-11-09. Plated stays (§1). Slices 0 and 1 done on `feat/log-a-run`; slice 4 done on `feat/bodyweight-foundations` (`2026-11-10-bodyweight-foundations-design.md`, migration 0005 since the split review took 0004); slice 2 (Garmin pull) is optional and decided after a couple of weeks of manual entry.
+**Status:** direction accepted 2026-11-09. Plated stays (§1). Slices 0 and 1 done on `feat/log-a-run`; slice 4 done on `feat/bodyweight-foundations` (`2026-11-10-bodyweight-foundations-design.md`, migration 0005 since the split review took 0004); slice 5 done on `feat/chains` (`2026-11-12-chains-design.md`, migration 0006); slice 2 (Garmin pull) is optional and decided after a couple of weeks of manual entry.
 **Date:** 2026-11-09
 
 Three independent delegates (Claude Opus 5.5, Muse Wonder Full 1.0, GPT-6.1
@@ -366,7 +366,7 @@ Each slice is one spec, one plan, TDD, useful on its own.
 | 2 | **Garmin pull.** *Optional, decided after slice 1.* `garmin_account` table (0003) holding the pasted key and expiry; a key field under account; Pull from Garmin on Train; `training/garmin.ts` mapping with real-response fixtures; laps as sets when `lapCount > 1`. | S–M | Every run on the watch lands in the log without typing. No OAuth, one key, two GET calls. |
 | 3 | **Run insight.** Weekly and 12-week mileage, spike cap, standard-distance PRs, Running card on stats, miles in lifetime totals. | S–M | The log becomes something to read, over real history rather than a few hand-typed runs. |
 | 4 | **Bodyweight foundations.** *Done 2026-11-10.* Seed squat fix. `requires_bar` (0004) and the `pull-up bar` gym key. Gym presets and plateless save. Synthetic staples. | M | A floor or bar gym generates a real week; pull-ups hold PRs. |
-| 5 | **Chains.** `chains.ts`, `suggestChain`, Move up / Move down in the logger, chain card ("Push 5/7 · Archer · 3×6"). | M–L | Hand-built bodyweight routines progress properly. Code is M; curating rungs is the L. |
+| 5 | **Chains.** *Done 2026-11-12.* `chains.ts`, `suggestChain`, Move up / Move down in the logger, chain card ("Push 5/7 · Archer · 3×6"). | M–L | Hand-built bodyweight routines progress properly. Code is M; curating rungs is the L. |
 | 6 | **Run days.** *Gated on slices 1–3 leaving a felt gap.* `routine_session` run fields, two tracks, hard-day line. | M | The hybrid plan, on top of real data. |
 | 7 | **Later.** Shoes. A cron-triggered pull if the button gets tedious. Calisthenics generator template and profile. Rename decision. | S each | |
 

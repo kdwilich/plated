@@ -68,6 +68,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		notes: null,
 		exercises: exercises.map((e) => ({ ...e, history: history[e.exercise_id] ?? [] })),
 		sets: [],
-		gym: { plates: gym.plates, dumbbell_step_lb: gym.dumbbell_step_lb, machine_step_lb: gym.machine_step_lb }
+		gym: {
+			plates: gym.plates,
+			dumbbell_step_lb: gym.dumbbell_step_lb,
+			machine_step_lb: gym.machine_step_lb,
+			equipment: gym.equipment
+		}
 	});
 };
