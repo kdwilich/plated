@@ -2,7 +2,7 @@
 	import { APP_NAME } from '$lib/brand';
 	import { goto } from '$app/navigation';
 	import { drainOutbox, enqueue, type OutboxEntry } from '$lib/client/session';
-	import { RUN_TYPES, fmtPace, paceSecPerMi, parseRunForm, runLabel, spikeCap, spikeLine, type RunType } from '$lib/training/running';
+	import { RUN_TYPES, clockInput, fmtPace, paceSecPerMi, parseRunForm, runLabel, spikeCap, spikeLine, type RunType } from '$lib/training/running';
 	import { localDay } from '$lib/training/streak';
 
 	// A run is logged after the fact, so this is a form, not a session: no
@@ -109,7 +109,18 @@
 		</label>
 		<label class="field">
 			<span class="label">Time</span>
-			<input class="num" type="text" inputmode="numeric" placeholder="24:30" bind:value={clockIn} />
+			<!-- Number pad, colons filled in: 2430 reads 24:30. Setting the element's
+			     value as well as the state keeps it in step when a keystroke changes
+			     nothing (a seventh digit), where state alone would not re-render. -->
+			<input
+				class="num"
+				type="text"
+				inputmode="numeric"
+				autocomplete="off"
+				placeholder="24:30"
+				value={clockIn}
+				oninput={(e) => (clockIn = e.currentTarget.value = clockInput(e.currentTarget.value))}
+			/>
 		</label>
 	</div>
 

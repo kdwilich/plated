@@ -75,6 +75,21 @@ export function parseClock(input: string): number | null {
 	return total > 0 ? total : null;
 }
 
+/**
+ * What the time field shows as it is typed. A phone's number pad has no
+ * colon, so digits fill from the right like a stopwatch: 2430 is 24:30,
+ * 10205 is 1:02:05. Anything that is not a digit is dropped, so a pasted
+ * "24:30" survives, and leading zeros go. Six digits at most, h:mm:ss.
+ */
+export function clockInput(raw: string): string {
+	const d = raw.replace(/\D/g, '').replace(/^0+/, '').slice(0, 6);
+	if (d.length <= 2) return d;
+	const ss = d.slice(-2);
+	const rest = d.slice(0, -2);
+	if (rest.length <= 2) return `${rest}:${ss}`;
+	return `${rest.slice(0, -2)}:${rest.slice(-2)}:${ss}`;
+}
+
 export type RunForm =
 	| { ok: true; distance_m: number; duration_s: number }
 	| { ok: false; error: string };

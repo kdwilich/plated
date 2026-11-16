@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 // keep the whole file red until the last cycle and hide each green.
 import {
 	biggestWeek,
+	clockInput,
 	fmtClock,
 	fmtMiles,
 	fmtPace,
@@ -222,4 +223,24 @@ test('the longest run sums a workout, and the biggest week is named by its Monda
 	assert.equal(r2(big.miles), r2(22000 / 1609.344));
 	assert.equal(longestRun([]), null);
 	assert.equal(biggestWeek([]), null);
+});
+
+test('typed digits fill the clock from the right, like a stopwatch', () => {
+	// A phone's number pad has no colon, so the field puts them in.
+	assert.equal(clockInput('4'), '4');
+	assert.equal(clockInput('45'), '45');
+	assert.equal(clockInput('245'), '2:45');
+	assert.equal(clockInput('2430'), '24:30');
+	assert.equal(clockInput('10205'), '1:02:05');
+	assert.equal(clockInput('110205'), '11:02:05');
+	assert.equal(clockInput('1102055'), '11:02:05'); // seven digits: the extra is dropped
+	// Backspacing "24:30" leaves "24:3", which re-reads as 2:43.
+	assert.equal(clockInput('24:3'), '2:43');
+	// Pasted or hardware-typed colons are ignored, and so are leading zeros.
+	assert.equal(clockInput('24:30'), '24:30');
+	assert.equal(clockInput('0530'), '5:30');
+	assert.equal(clockInput('0'), '');
+	assert.equal(clockInput(''), '');
+	// Whatever it produces, parseClock reads.
+	assert.equal(parseClock(clockInput('10205')), 3725);
 });
