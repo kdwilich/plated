@@ -1,6 +1,9 @@
 import type { PageServerLoad } from './$types';
+import { getDb } from '$lib/server/db';
+import { runSets } from '$lib/server/stats';
 
-/** Nothing to load. The file exists so the route has a server pass like every
- *  other page: hooks.server.ts redirects a signed-out visit before a form whose
- *  submission would 401 at the outbox ever renders. */
-export const load: PageServerLoad = async () => ({});
+/** The last month of runs, for the spike line under the distance. 31 days so
+ *  the browser's own 30-day window is covered whatever zone it is in. */
+export const load: PageServerLoad = async ({ platform, locals }) => ({
+	recent: await runSets(getDb(platform), locals.user!.id, 31)
+});

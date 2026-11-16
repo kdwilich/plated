@@ -2,13 +2,15 @@
 	import { APP_NAME } from '$lib/brand';
 	import { goto } from '$app/navigation';
 	import { drainOutbox, enqueue, type OutboxEntry } from '$lib/client/session';
-	import { RUN_TYPES, fmtPace, paceSecPerMi, parseRunForm, runLabel, type RunType } from '$lib/training/running';
+	import { RUN_TYPES, fmtPace, paceSecPerMi, parseRunForm, runLabel, spikeCap, spikeLine, type RunType } from '$lib/training/running';
 	import { localDay } from '$lib/training/streak';
 
 	// A run is logged after the fact, so this is a form, not a session: no
 	// clock, no start button, and nothing here touches the active lift in
 	// IndexedDB. Submit builds a *finished* outbox entry and sends it down the
 	// path a finished session takes. In a dead zone it waits like one.
+
+	let { data } = $props();
 
 	let date = $state(localDay(new Date()));
 	let milesIn = $state('');
@@ -23,6 +25,11 @@
 	const pace = $derived(parsed.ok ? paceSecPerMi(parsed.distance_m, parsed.duration_s) : null);
 	// Only nag once both fields have been touched; an empty form is not wrong yet.
 	const showError = $derived(!parsed.ok && milesIn !== '' && clockIn !== '');
+
+	// The guardrail is for the run about to be logged against the month behind
+	// it. A backdated run has a different month behind it, so say nothing.
+	const cap = $derived(date === localDay(new Date()) ? spikeCap(data.recent, new Date()) : null);
+	const spiked = $derived(cap !== null && parsed.ok && parsed.distance_m > cap.cap_m);
 
 	/** Today keeps the wall clock, so two runs in a day order correctly. A
 	 *  backdated run sits at local noon: `new Date('YYYY-MM-DD')` would parse as
@@ -110,6 +117,9 @@
 		{#if pace !== null}{fmtPace(pace)}/mi{:else if showError && !parsed.ok}{parsed.error}{:else}&nbsp;{/if}
 	</p>
 
+	<!-- A suggestion. It never disables Save: the run already happened. -->
+	{#if cap}<p class="spike" class:over={spiked}>{spikeLine(cap)}</p>{/if}
+
 	<div class="chips" role="radiogroup" aria-label="Run type">
 		{#each RUN_TYPES as t (t)}
 			<button type="button" class="chip" class:on={runType === t} role="radio" aria-checked={runType === t} onclick={() => (runType = t)}>
@@ -147,6 +157,7 @@
 	.field input { min-height: $tap-target; }
 	.pair { display: grid; grid-template-columns: 1fr 1fr; gap: $space-3; }
 	.pace { min-height: 1.5em; color: $text-dim; margin: 0; }
+	.spike { margin: 0; font-size: 12px; color: $text-faint; &.over { color: $signal; } }
 	.chips { display: flex; flex-wrap: wrap; gap: $space-2; }
 	.chip {
 		min-height: $tap-target-sm;

@@ -5,6 +5,7 @@ import {
 	exportWorkouts,
 	headlineRecords,
 	lifetimeTotals,
+	runSets,
 	trainedInWindow,
 	trainingDays
 } from './stats.ts';
@@ -83,7 +84,7 @@ test('an unfinished workout counts for nothing', async () => {
 		sets: [{ weight: 225, reps: 5 }]
 	});
 	const t = await lifetimeTotals(db, 1);
-	assert.deepEqual(t, { workouts: 0, sets: 0, reps: 0, volume_lb: 0 });
+	assert.deepEqual(t, { workouts: 0, sets: 0, reps: 0, volume_lb: 0, runs: 0, run_m: 0 });
 });
 
 test('tonnage treats a bodyweight set as zero rather than as an error', async () => {
@@ -244,4 +245,69 @@ test('a run is a workout but not a set', async () => {
 	assert.equal(t.workouts, 2);
 	assert.equal(t.sets, 1);
 	assert.equal(t.reps, 5);
+});
+
+async function addRun(
+	db: D1Database,
+	o: { id: string; user: number; started: string; finished?: string | null; sets: [number | null, number | null, number?][] }
+): Promise<void> {
+	await db
+		.prepare(`INSERT INTO workout (id, started_at, finished_at, run_type, user_id) VALUES (?, ?, ?, 'easy', ?)`)
+		.bind(o.id, o.started, o.finished === undefined ? o.started : o.finished, o.user)
+		.run();
+	let i = 0;
+	for (const [distance, duration, warmup] of o.sets) {
+		await db
+			.prepare(
+				`INSERT INTO workout_set (id, workout_id, exercise_id, position, duration_s, distance_m, is_warmup, completed_at)
+				 VALUES (?, ?, 'run', ?, ?, ?, ?, ?)`
+			)
+			.bind(`${o.id}-s${i}`, o.id, i, duration, distance, warmup ?? 0, o.started)
+			.run();
+		i++;
+	}
+}
+
+const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+
+test('run sets are the distance sets of finished runs, the caller\'s only, oldest first', async () => {
+	const db = await seed(testDb());
+	await addRun(db, { id: 'r2', user: 1, started: daysAgo(2), sets: [[1609, 600, 1], [5000, 1500]] });
+	await addRun(db, { id: 'r1', user: 1, started: daysAgo(40), sets: [[8000, 2400]] });
+	await addRun(db, { id: 'open', user: 1, started: daysAgo(1), finished: null, sets: [[3000, 900]] });
+	await addRun(db, { id: 'theirs', user: 2, started: daysAgo(1), sets: [[3000, 900]] });
+	await addRun(db, { id: 'blank', user: 1, started: daysAgo(3), sets: [[null, 900]] });
+	// A treadmill mile inside a lift is not a run.
+	await addWorkout(db, { id: 'lift', user: 1, started: daysAgo(1), sets: [{ weight: 225, reps: 5 }] });
+	await db
+		.prepare(
+			`INSERT INTO workout_set (id, workout_id, exercise_id, position, duration_s, distance_m, is_warmup, completed_at)
+			 VALUES ('lift-run', 'lift', 'run', 9, 600, 1609, 0, ?)`
+		)
+		.bind(daysAgo(1))
+		.run();
+
+	const rows = await runSets(db, 1);
+	assert.deepEqual(rows.map((r) => [r.workout_id, r.distance_m, r.duration_s, r.is_warmup]), [
+		['r1', 8000, 2400, 0],
+		['r2', 1609, 600, 1],
+		['r2', 5000, 1500, 0]
+	]);
+	assert.equal(typeof rows[0].started_at, 'string');
+	assert.deepEqual((await runSets(db, 1, 31)).map((r) => r.workout_id), ['r2', 'r2']);
+});
+
+test('lifetime totals count runs and their metres, warm-ups included, and nothing else', async () => {
+	const db = await seed(testDb());
+	assert.deepEqual(await lifetimeTotals(db, 1), { workouts: 0, sets: 0, reps: 0, volume_lb: 0, runs: 0, run_m: 0 });
+	await addWorkout(db, { id: 'w1', user: 1, started: daysAgo(5), sets: [{ weight: 225, reps: 5 }] });
+	await addRun(db, { id: 'r1', user: 1, started: daysAgo(4), sets: [[1609, 600, 1], [5000, 1500]] });
+	await addRun(db, { id: 'r2', user: 1, started: daysAgo(3), sets: [] });
+	await addRun(db, { id: 'open', user: 1, started: daysAgo(1), finished: null, sets: [[3000, 900]] });
+	await addRun(db, { id: 'theirs', user: 2, started: daysAgo(1), sets: [[3000, 900]] });
+	const t = await lifetimeTotals(db, 1);
+	assert.equal(t.workouts, 3);
+	assert.equal(t.runs, 2);
+	assert.equal(t.run_m, 6609);
+	assert.equal(t.sets, 1);
 });

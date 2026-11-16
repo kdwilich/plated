@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/brand';
 	import GuideLink from '$lib/components/GuideLink.svelte';
+	import RunningCard from '$lib/components/RunningCard.svelte';
 	import { isNetLoad } from '$lib/training/measurement';
 	import { plateEquivalent } from '$lib/training/records';
-	import { fmtMiles } from '$lib/training/running';
+	import { fmtMiles, miles } from '$lib/training/running';
 	import { DISPLAY_GROUPS, muscleGroup } from '$lib/training/volume';
 	import type { HeadlineRecord } from '$lib/server/stats';
 
@@ -12,9 +13,12 @@
 	const LOADED = new Set(['load_reps', 'load_time']);
 	const RECENT_DAYS = 30;
 
+	// The Run row's headline is "furthest", which the Running card says
+	// better and beside the records that matter for a run. It leaves this list.
+	const records = $derived(data.records.filter((r) => r.exercise_id !== 'run'));
+
 	const recentCount = $derived(
-		data.records.filter((r) => Date.now() - Date.parse(r.completed_at) < RECENT_DAYS * 86_400_000)
-			.length
+		records.filter((r) => Date.now() - Date.parse(r.completed_at) < RECENT_DAYS * 86_400_000).length
 	);
 
 	/** Exercises land under every group their primary muscles touch. Anything
@@ -22,7 +26,7 @@
 	 *  volume scoring does to it. */
 	const byGroup = $derived.by(() => {
 		const out: Record<string, HeadlineRecord[]> = {};
-		for (const r of data.records) {
+		for (const r of records) {
 			const groups = new Set<string>();
 			if (r.movement_pattern) {
 				for (const m of r.primary_muscles) {
@@ -115,6 +119,16 @@
 			<span class="stat num">{Math.round(data.totals.volume_lb).toLocaleString()}</span>
 			<span class="label">lb lifted</span>
 		</div>
+		{#if data.totals.runs > 0}
+			<div>
+				<span class="stat num">{data.totals.runs.toLocaleString()}</span>
+				<span class="label">runs</span>
+			</div>
+			<div>
+				<span class="stat num">{miles(data.totals.run_m).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+				<span class="label">miles</span>
+			</div>
+		{/if}
 	</div>
 	<p class="plates num">
 		That is {plateEquivalent(data.totals.volume_lb).toLocaleString()} forty-fives.
@@ -123,6 +137,9 @@
 	     bodyweight lift looks authoritative sitting next to a heatmap. -->
 	<p class="caveat">Bodyweight lifts log no weight, so pull-ups and dips count zero here.</p>
 </section>
+
+<!-- Above the sets table and never added to it: miles and sets share no scale. -->
+<RunningCard rows={data.runs} />
 
 <p class="label section-label">Sets by muscle group</p>
 <div class="table-head num">

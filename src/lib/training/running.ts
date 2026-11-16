@@ -128,3 +128,157 @@ export function weekSoFar(rows: ActivityRow[], today: Date): { lifts: number; ru
 	}
 	return { lifts, runs, miles: miles(m) };
 }
+
+// --- Insight ---------------------------------------------------------------
+//
+// Everything below reads the same rows: one per distance set of a finished
+// run, the whole history. The browser does the bucketing, as it does for the
+// streak, because the server does not know what day the runner thinks it is.
+
+export interface RunSet {
+	workout_id: string;
+	started_at: string;
+	distance_m: number;
+	duration_s: number | null;
+	/** 0 | 1 as stored. Warm-up, recoveries and cool-down: miles, not records. */
+	is_warmup: number | boolean;
+}
+
+interface Run {
+	started_at: string;
+	distance_m: number;
+}
+
+/** A run is a workout: its sets summed, warm-up and all. */
+function runs(rows: RunSet[]): Run[] {
+	const byWorkout = new Map<string, Run>();
+	for (const r of rows) {
+		const run = byWorkout.get(r.workout_id);
+		if (run) run.distance_m += r.distance_m;
+		else byWorkout.set(r.workout_id, { started_at: r.started_at, distance_m: r.distance_m });
+	}
+	return [...byWorkout.values()];
+}
+
+/** Metres per local Monday-start week, keyed by streak.ts's week index. */
+function metresByWeek(rows: RunSet[]): Map<number, number> {
+	const out = new Map<number, number>();
+	for (const r of rows) {
+		const d = new Date(r.started_at);
+		if (Number.isNaN(d.getTime())) continue;
+		const w = weekIndex(localDay(d));
+		out.set(w, (out.get(w) ?? 0) + r.distance_m);
+	}
+	return out;
+}
+
+/**
+ * Miles per week, oldest first, `weeks` long and zero-filled; the last entry
+ * is the week containing `today`. Every row counts: mileage is mileage.
+ */
+export function weeklyMiles(rows: RunSet[], today: Date, weeks = 12): number[] {
+	const byWeek = metresByWeek(rows);
+	const thisWeek = weekIndex(localDay(today));
+	return Array.from({ length: weeks }, (_, i) => miles(byWeek.get(thisWeek - (weeks - 1 - i)) ?? 0));
+}
+
+const SPIKE_WINDOW_MS = 30 * 86_400_000;
+const SPIKE_RATIO = 1.1;
+
+/**
+ * The per-run guardrail. Not the 10% weekly rule, which the one randomised
+ * trial of graded progression did not support: in a 5,205-runner cohort a
+ * single run more than 10% past the longest of the previous 30 days was
+ * associated with injury, and week-over-week change was not. Observational
+ * and distance-only, so it is a line of text, never a block.
+ */
+export function spikeCap(rows: RunSet[], now: Date): { longest_m: number; cap_m: number } | null {
+	const end = now.getTime();
+	let longest = 0;
+	for (const run of runs(rows)) {
+		const t = Date.parse(run.started_at);
+		if (Number.isNaN(t) || t > end || t < end - SPIKE_WINDOW_MS) continue;
+		if (run.distance_m > longest) longest = run.distance_m;
+	}
+	return longest > 0 ? { longest_m: longest, cap_m: longest * SPIKE_RATIO } : null;
+}
+
+/** One wording, so the stats card and the run form cannot drift. */
+export const spikeLine = (cap: { longest_m: number; cap_m: number }): string =>
+	`Longest in 30 days is ${miles(cap.longest_m).toFixed(1)}. Past ${miles(cap.cap_m).toFixed(1)} is a spike.`;
+
+export const STANDARD_DISTANCES = [
+	{ key: 'mile', label: 'Mile', m: MILE_M },
+	{ key: '5k', label: '5K', m: 5000 },
+	{ key: '10k', label: '10K', m: 10000 },
+	{ key: 'half', label: 'Half', m: 21097.5 },
+	{ key: 'marathon', label: 'Marathon', m: 42195 }
+] as const;
+
+export interface StandardRecord {
+	key: (typeof STANDARD_DISTANCES)[number]['key'];
+	label: string;
+	/** Time over exactly the standard distance, scaled from the set below. */
+	time_s: number;
+	/** The real set, always shown beside the scaled time. */
+	distance_m: number;
+	duration_s: number;
+	started_at: string;
+}
+
+/**
+ * Best time at each standard distance that has one, shortest distance first.
+ * A work set counts when it is within −2% / +4% of the distance, which
+ * absorbs GPS noise and a watch stopped a few strides late. The time is
+ * scaled to the exact distance and the real set rides along: the rule Epley
+ * already follows, an estimate never shown without what it came from.
+ */
+export function standardRecords(rows: RunSet[]): StandardRecord[] {
+	const out: StandardRecord[] = [];
+	for (const d of STANDARD_DISTANCES) {
+		// Integer arithmetic on the bounds, so 4900 m is inside a 5K's band
+		// rather than a float's width outside it.
+		const lo = (d.m * 98) / 100;
+		const hi = (d.m * 104) / 100;
+		let best: StandardRecord | null = null;
+		for (const r of rows) {
+			if (r.is_warmup || !r.duration_s || r.duration_s <= 0) continue;
+			if (r.distance_m < lo || r.distance_m > hi) continue;
+			const time_s = (r.duration_s * d.m) / r.distance_m;
+			if (best === null || time_s < best.time_s) {
+				best = {
+					key: d.key,
+					label: d.label,
+					time_s,
+					distance_m: r.distance_m,
+					duration_s: r.duration_s,
+					started_at: r.started_at
+				};
+			}
+		}
+		if (best) out.push(best);
+	}
+	return out;
+}
+
+export function longestRun(rows: RunSet[]): Run | null {
+	let best: Run | null = null;
+	for (const run of runs(rows)) if (best === null || run.distance_m > best.distance_m) best = run;
+	return best;
+}
+
+/** The local week with the most miles, named by its Monday (YYYY-MM-DD). */
+export function biggestWeek(rows: RunSet[]): { miles: number; monday: string } | null {
+	let week: number | null = null;
+	let most = 0;
+	for (const [w, m] of metresByWeek(rows)) {
+		if (m > most) {
+			most = m;
+			week = w;
+		}
+	}
+	if (week === null) return null;
+	// The inverse of weekIndex: Monday 5 January 1970 plus whole weeks.
+	const monday = new Date(Date.UTC(1970, 0, 5) + week * 7 * 86_400_000).toISOString().slice(0, 10);
+	return { miles: miles(most), monday };
+}

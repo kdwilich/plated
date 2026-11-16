@@ -9,16 +9,20 @@ export interface LifetimeTotals {
 	sets: number;
 	reps: number;
 	volume_lb: number;
+	runs: number;
+	/** Metres over every set of every run, warm-ups included. */
+	run_m: number;
 }
 
 /**
- * Two queries rather than one join, so each number means what it says: a
+ * Separate queries rather than one join, so each number means what it says: a
  * workout that finished with nothing but warmups is still a workout, but it
  * contributed no sets. A run is a workout, not a set, so distance sets are
- * left out of the count too.
+ * left out of the count too, and runs get their own two numbers: miles and
+ * sets share no scale.
  */
 export async function lifetimeTotals(db: D1Database, userId: number): Promise<LifetimeTotals> {
-	const [w, s] = await db.batch([
+	const [w, s, r] = await db.batch([
 		db
 			.prepare(
 				'SELECT COUNT(*) AS workouts FROM workout WHERE user_id = ? AND finished_at IS NOT NULL'
@@ -35,15 +39,61 @@ export async function lifetimeTotals(db: D1Database, userId: number): Promise<Li
 				 WHERE w.user_id = ? AND w.finished_at IS NOT NULL AND ws.is_warmup = 0
 				   AND e.measurement <> 'distance_time'`
 			)
+			.bind(userId),
+		// LEFT JOIN: a run logged without a distance is still a run.
+		db
+			.prepare(
+				`SELECT COUNT(DISTINCT w.id) AS runs, COALESCE(SUM(ws.distance_m), 0) AS run_m
+				 FROM workout w
+				 LEFT JOIN workout_set ws ON ws.workout_id = w.id
+				 WHERE w.user_id = ? AND w.finished_at IS NOT NULL AND w.run_type IS NOT NULL`
+			)
 			.bind(userId)
 	]);
 	const counts = (s.results[0] ?? {}) as Record<string, number>;
+	const running = (r.results[0] ?? {}) as Record<string, number>;
 	return {
 		workouts: ((w.results[0] ?? {}) as Record<string, number>).workouts ?? 0,
 		sets: counts.sets ?? 0,
 		reps: counts.reps ?? 0,
-		volume_lb: counts.volume_lb ?? 0
+		volume_lb: counts.volume_lb ?? 0,
+		runs: running.runs ?? 0,
+		run_m: running.run_m ?? 0
 	};
+}
+
+export interface RunSetRow {
+	workout_id: string;
+	started_at: string;
+	distance_m: number;
+	duration_s: number | null;
+	is_warmup: number;
+}
+
+/**
+ * Every distance set of every finished run, oldest first, for the Running
+ * card. Raw rows and the whole history on purpose: weekly miles are bucketed
+ * by local week in the browser (training/running.ts), which SQL cannot do,
+ * and records and the biggest week need all of it. `days` bounds the read for
+ * a caller that only wants a recent window.
+ *
+ * A run is a workout with a run_type, the rule the week strip on Train uses.
+ * A treadmill mile inside a lift is not one.
+ */
+export async function runSets(db: D1Database, userId: number, days?: number): Promise<RunSetRow[]> {
+	const since = days === undefined ? '' : new Date(Date.now() - days * 86_400_000).toISOString();
+	const { results } = await db
+		.prepare(
+			`SELECT ws.workout_id, w.started_at, ws.distance_m, ws.duration_s, ws.is_warmup
+			 FROM workout_set ws
+			 JOIN workout w ON w.id = ws.workout_id
+			 WHERE w.user_id = ? AND w.finished_at IS NOT NULL AND w.run_type IS NOT NULL
+			   AND ws.distance_m IS NOT NULL AND w.started_at >= ?
+			 ORDER BY w.started_at, ws.position`
+		)
+		.bind(userId, since)
+		.all<RunSetRow>();
+	return results;
 }
 
 /**
